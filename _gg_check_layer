@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+echo _gg_check_layer:
 
 . $(which _gg_lib)
 
@@ -19,7 +20,8 @@ _WORK_DIR=$GG_BACKUP_ROOT
 [[ "$_WORK_DIR" != */ ]] && _WORK_DIR="$_WORK_DIR"/
 
 _LAYER_DIR="$_WORK_DIR$GG_LAYER"
-_WORK_DIR="$_WORK_DIR$GG_LAYER/_root"
+_WORK_DIR="$_LAYER_DIR/_root"
+metadata_file="$_LAYER_DIR/.permissions"
 
 if [ -d "$_WORK_DIR" ]; then
 	echo "Selected layer: $GG_LAYER"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo _gg_check_root:
 if [ -z "$GG_BACKUP_ROOT" ]; then
   echo "Error: GG_BACKUP_ROOT environement variable is not set."
   exit 1

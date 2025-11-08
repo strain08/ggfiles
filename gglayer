@@ -24,7 +24,7 @@ fi
 # no spaces allowed in layer name
 GG_LAYER=$( echo "$1" | tr -d '[:space:]' )
 
-if [ -d "$GG_BACKUP_ROOT/$GG_LAYER" ]; then
+if [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ]; then
 	echo "Layer '$GG_LAYER' exists at $GG_BACKUP_ROOT/$GG_LAYER"
 	echo "Layer contents:"
 	tree "$GG_BACKUP_ROOT/$GG_LAYER/_root"

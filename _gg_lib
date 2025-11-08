@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+echo _gg_lib:
+
+os=$(uname -s)
 
 list_layers() {
 	for dir in "$GG_BACKUP_ROOT"/*/; do
@@ -40,8 +43,6 @@ print_style () {
     printf "$STARTCOLOR%$2b$ENDCOLOR" "$text";
 }
 
-os=$(uname -s)
-
 # Store file metadata (permissions and ownership)
 store_metadata() {
     local file="$1"
@@ -68,6 +69,23 @@ restore_metadata() {
             chown "$uid:$gid" "$file" 2>/dev/null || echo "Warning: Could not set ownership on $file (may need sudo)"
         fi
     done < "$metadata_file"
+}
+
+# Check if metadata exists for a file
+check_metadata_exists() {
+    local file="$1"
+    local metadata_file="$2"
+
+
+    [ ! -f "$metadata_file" ] && return 1
+
+    while read -r stored_file _perms _uid _gid; do
+        if [ "$stored_file" = "$file" ]; then
+            return 0
+        fi
+    done < "$metadata_file"
+
+    return 1
 }
 
 # Generate relative file list for a given directory

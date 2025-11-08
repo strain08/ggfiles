@@ -2,7 +2,7 @@
 
 . $(which _gg_check_root)
 . $(which _gg_check_layer)
-. $(which _gg_lib)
+
 
 help="
 Usage: ggadd <path>
@@ -18,24 +18,32 @@ else
     file_to_add="$(realpath -q "$1" 2>/dev/null)"
 fi
 
-echo "Adding file to backup: $file_to_add"
+echo "Adding to backup: $file_to_add"
+
 # final checks
 [[ -d "$file_to_add" || -f "$file_to_add" ]] || ( echo "Can not locate file: $1" && exit 1 )
 
 # check if file is within _WORK_DIR
-case "$file_to_add" in
-    "$_WORK_DIR"*) echo "Error: Cannot backup files from within $_WORK_DIR" && exit 1 ;;
-esac
+if [[ "$file_to_add" =~ ^"$GG_BACKUP_ROOT".* ]]; then
+	echo "Not backing up the backup in the backup :)"
+	exit 1
+fi
 
 # --delete-after to remove files no longer present in source
 rsync -avR "$file_to_add" "$_WORK_DIR"
 
 # Store metadata for all files being backed up
-metadata_file="$_LAYER_DIR/.permissions"
+
 if [ -f "$file_to_add" ]; then
     # Single file
-    store_metadata "$file_to_add" "$metadata_file"
+	check_metadata_exists "$file" "$metadata_file"
+    [ $? -ne 0 ] && store_metadata "$file_to_add" "$metadata_file"
+
 elif [ -d "$file_to_add" ]; then
     # Directory - store metadata for all files
-    find "$file_to_add" -type f -exec sh -c 'store_metadata "$1" "$2"' _ {} "$metadata_file" \;
+	files_list=$(find "$file_to_add" -type f)
+	for file in $files_list; do
+		check_metadata_exists "$file" "$metadata_file"
+		[ $? -ne 0 ] && store_metadata "$file" "$metadata_file"
+	done
 fi
