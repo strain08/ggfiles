@@ -2,11 +2,12 @@
 
 . $(which _gg_check_root)
 . $(which _gg_check_layer)
-. $(which _ggperm_util)
+. $(which _gg_lib)
 
 help="
 Usage: ggadd <path>
 "
+
 [ -z "$1" ] && echo $help && exit 0
 # realpath resolves symlinks and returns the absolute path:
 # realpath -q /dev/log => /var/run/log
@@ -28,3 +29,13 @@ esac
 
 # --delete-after to remove files no longer present in source
 rsync -avR "$file_to_add" "$_WORK_DIR"
+
+# Store metadata for all files being backed up
+metadata_file="$_LAYER_DIR/.permissions"
+if [ -f "$file_to_add" ]; then
+    # Single file
+    store_metadata "$file_to_add" "$metadata_file"
+elif [ -d "$file_to_add" ]; then
+    # Directory - store metadata for all files
+    find "$file_to_add" -type f -exec sh -c 'store_metadata "$1" "$2"' _ {} "$metadata_file" \;
+fi

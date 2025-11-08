@@ -16,6 +16,18 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
+# Update metadata for all files in backup
+printf "Updating metadata...\n"
+metadata_file="$_LAYER_DIR/.permissions"
+> "$metadata_file"  # Clear existing metadata file
+find "$_WORK_DIR" -type f ! -name ".permissions" | while read -r backed_up_file; do
+    # Convert backup path to original system path
+    original_file="${backed_up_file#$_WORK_DIR}"
+    if [ -f "$original_file" ]; then
+        store_metadata "$original_file" "$metadata_file"
+    fi
+done
+
 #files_list=$(find . -type f)
 
 #relative_file_list "$_WORK_DIR" | rsync -a --files-from=- / "$_WORK_DIR"

@@ -41,3 +41,44 @@ print_style () {
 }
 
 os=$(uname -s)
+
+# Store file metadata (permissions and ownership)
+store_metadata() {
+    local file="$1"
+    local metadata_file="$2"
+
+    if [ "$os" == "Linux" ]; then
+        stat -c "%n %a %u %g" "$file" >> "$metadata_file"
+    else
+        # FreeBSD/macOS
+        stat -f "%N %Mp%Lp %u %g" "$file" >> "$metadata_file"
+    fi
+}
+
+# Restore file metadata from metadata file
+restore_metadata() {
+    local metadata_file="$1"
+
+    [ ! -f "$metadata_file" ] && return 0
+
+    while read -r file perms uid gid; do
+        [ -z "$file" ] && continue
+        if [ -e "$file" ]; then
+            chmod "$perms" "$file" 2>/dev/null || echo "Warning: Could not set permissions on $file"
+            chown "$uid:$gid" "$file" 2>/dev/null || echo "Warning: Could not set ownership on $file (may need sudo)"
+        fi
+    done < "$metadata_file"
+}
+
+# Generate relative file list for a given directory
+relative_file_list() {
+    local _path="$1"
+	local save_dir=$(pwd)
+
+    [ -z "$_path" ] && return 1
+    [ ! -d "$_path" ] && return 1
+
+    cd "$_path" || return 1
+    find . -type f ! -name ".permissions" | sed 's|^\./||'
+	cd "$save_dir"
+}
