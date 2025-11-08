@@ -27,12 +27,12 @@ GG_LAYER=$( echo "$1" | tr -d '[:space:]' )
 if [ -d "$GG_BACKUP_ROOT/$GG_LAYER" ]; then
 	echo "Layer '$GG_LAYER' exists at $GG_BACKUP_ROOT/$GG_LAYER"
 	echo "Layer contents:"
-	tree "$GG_BACKUP_ROOT/$GG_LAYER"
+	tree "$GG_BACKUP_ROOT/$GG_LAYER/_root"
 	echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
 	echo "Layer '$GG_LAYER' is now active."
 	exit 0
 else
-	mkdir -p "$GG_BACKUP_ROOT/$GG_LAYER" 2>/dev/null
+	mkdir -p "$GG_BACKUP_ROOT/$GG_LAYER/_root" 2>/dev/null
 	if [ $? -ne 0 ]; then
 		echo "Error: Unable to create directory at $GG_BACKUP_ROOT/$GG_LAYER"
 		echo "Layer not set."

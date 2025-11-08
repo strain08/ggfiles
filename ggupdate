@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-
-. $(which _ggperm_util)
 . $(which _gg_check_root)
 . $(which _gg_check_layer)
 
@@ -38,28 +36,5 @@ fi
 # done
 
 # Update permissions and ownership backed-up files and folders
-printf "Updating backup permissions ..."
-find . | while read -r file; do
-	# Remove leading ./ from file path
-	rel_path="${file#./}"
-	src_file="/$rel_path"
-	dest_file="$_WORK_DIR/$rel_path"
-
-	if [ -e "$src_file" ]; then
-        if [ -d "$src_file" ]; then
-			_perm=$(get_file_perm "$src_file/")
-			_ownr=$(get_file_own "$src_file/")
-			chmod "$_perm" "$dest_file/"
-			chown "$_ownr" "$dest_file/"
-        else
-			_perm=$(get_file_perm "$src_file")
-			_ownr=$(get_file_own "$src_file")
-			chmod "$_perm" "$dest_file"
-			chown "$_ownr" "$dest_file"
-        fi
-    fi
-	printf "."
-done
-printf "\n Done.\n "
 
 cd "$pwd_before_update" || exit 1
