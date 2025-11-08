@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+# sets the working layer as GG_LAYER env var
+# all commands should work on this layer or fail
+
+. $(which _gg_check_root)
+. $(which _gg_lib)
+
+help="
+Usage: ggselect <layer-name>
+"
+
+if [ -z "$1" ]; then
+	echo $help
+	echo Available layers:
+	list_layers
+	if [ -f /tmp/gg_layer.env ]; then
+		. /tmp/gg_layer.env
+		echo Active layer: $GG_LAYER
+	fi
+	exit
+fi
+
+# no spaces allowed in layer name
+GG_LAYER=$( echo "$1" | tr -d '[:space:]' )
+
+if [ -d "$GG_BACKUP_ROOT/$GG_LAYER" ]; then
+	echo "Layer '$GG_LAYER' exists at $GG_BACKUP_ROOT/$GG_LAYER"
+	echo "Layer contents:"
+	tree "$GG_BACKUP_ROOT/$GG_LAYER"
+	echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
+	echo "Layer '$GG_LAYER' is now active."
+	exit 0
+else
+	mkdir -p "$GG_BACKUP_ROOT/$GG_LAYER" 2>/dev/null
+	if [ $? -ne 0 ]; then
+		echo "Error: Unable to create directory at $GG_BACKUP_ROOT/$GG_LAYER"
+		echo "Layer not set."
+		exit 1
+	else
+		echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
+		echo "Layer '$GG_LAYER' created at $GG_BACKUP_ROOT/$GG_LAYER'"
+		echo "Layer '$GG_LAYER' is now active."
+		exit 0
+	fi
+fi
+

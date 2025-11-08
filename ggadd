@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+. $(which _gg_check_root)
+. $(which _gg_check_layer)
+. $(which _ggperm_util)
+
+help="
+Usage: ggadd <path>
+"
+[ -z "$1" ] && echo $help && exit 0
+# realpath resolves symlinks and returns the absolute path:
+# realpath -q /dev/log => /var/run/log
+# Handle realpath differences between Linux and BSD
+if [ "$os" == "Linux" ]; then
+    file_to_add="$(realpath "$1" 2>/dev/null)"
+else
+    file_to_add="$(realpath -q "$1" 2>/dev/null)"
+fi
+
+echo "Adding file to backup: $file_to_add"
+# final checks
+[[ -d "$file_to_add" || -f "$file_to_add" ]] || ( echo "Can not locate file: $1" && exit 1 )
+
+# check if file is within _WORK_DIR
+case "$file_to_add" in
+    "$_WORK_DIR"*) echo "Error: Cannot backup files from within $_WORK_DIR" && exit 1 ;;
+esac
+
+# --delete-after to remove files no longer present in source
+rsync -avR "$file_to_add" "$_WORK_DIR"

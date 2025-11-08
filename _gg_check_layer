@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+. $(which _gg_lib)
+
+[ -f /tmp/gg_layer.env ] && . /tmp/gg_layer.env
+
+if [ -z "$GG_LAYER" ]; then
+	echo "GG_LAYER is not set."
+	echo "Run gglayer <layer_name> to create/select layer."
+	echo Available layers:
+	list_layers
+	exit 1
+fi
+
+# define working directories
+_WORK_DIR=$GG_BACKUP_ROOT
+
+# add ending slash if absent
+[[ "$_WORK_DIR" != */ ]] && _WORK_DIR="$_WORK_DIR"/
+
+_WORK_DIR="$_WORK_DIR$GG_LAYER/"
+
+if [ -d "$_WORK_DIR" ]; then
+	echo "Selected layer: $GG_LAYER"
+	echo "Working directory: $_WORK_DIR"
+else
+	echo "Working dir not found." && exit 1
+fi

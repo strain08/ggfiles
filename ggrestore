@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+. $(which _gg_check_root)
+. $(which _gg_check_layer) # provides $_WORK_DIR
+
+help="
+Usage: ggrestore [--doit] [file_pattern]\n
+Restores files from the backup directory to their original locations.\n
+--doit\t\t: Restores files. If not specified, script runs in dry-run mode.\n
+file_pattern\t: regular expression, applied to whole path.\n
+\t\tIf no regex_pattern is provided, all files are restored.\n
+"
+# COMMAND LINE >>>
+if [[ $1 == "--help" || $1 == "-h" ]]; then
+	echo -e $help
+	exit 0
+fi
+
+# Use --dry-run unless --doit is provided
+if [[ "$1" == "--doit" ]]; then
+    RSYNC_RUN=""
+	if [ -z "$2" ]; then
+		echo "Restoring all files from backup..."
+		specified_file=""
+	else
+		echo "Trying to restore specified file from backup: $2"
+		specified_file="$2"
+	fi
+else
+	# $1 is not --doit
+    RSYNC_RUN="--dry-run"
+	echo "** DRY RUN MODE ** Use --doit to do it."
+	if [ -z "$1" ]; then
+		echo "Restoring all files from backup..."
+		specified_file=""
+	else
+		echo "Trying to restore specified file from backup: $1"
+		specified_file="$1"
+	fi
+fi
+# COMMAND LINE <<<
+
+pwd_before_update=$(pwd)
+cd "$_WORK_DIR"
+
+
+tmpfile=$(mktemp)
+# Write all found files to the temporary file, stripping leading ./
+if [ -z "$specified_file" ]; then
+    # If no pattern specified, get all files
+    find . -type f | sed 's|^./||' > "$tmpfile"
+else
+    # Use grep -E instead of egrep for better compatibility
+    find . -type f | grep -E "$specified_file" | sed 's|^./||' > "$tmpfile"
+fi
+
+# Check if any files were found
+if [ ! -s "$tmpfile" ]; then
+    echo "No files found matching pattern"
+    rm "$tmpfile"
+    exit 1
+fi
+
+# Count and display files to be restored
+count=$(wc -l < "$tmpfile")
+echo "Found $count files to restore"
+
+# Use rsync with --files-from
+rsync -av $RSYNC_RUN --files-from="$tmpfile" . /
+result=$?
+
+# cleanup
+rm "$tmpfile"
+cd "$pwd_before_update"
+
+if [ $result -ne 0 ]; then
+	echo Errors encountred during restore.
+	exit 1
+fi
+
+if [ -z "$RSYNC_RUN" ]; then
+    echo "Restore completed successfully."
+	echo "Check file permissions."
+else
+    echo "Dry run completed. Use --doit to perform the actual restore"
+fi

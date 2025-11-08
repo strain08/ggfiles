@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+list_layers() {
+	for dir in "$GG_BACKUP_ROOT"/*/; do
+		[ -d "$dir" ] || continue
+		basename "$dir"
+	done
+}
+
+# prints colored text
+print_style () {
+    local text=$1
+    local colorval=$2
+
+    case $colorval in
+		purple)
+			COLOR="35m"
+			;;
+		green)
+			COLOR="32m"
+			;;
+		yellow)
+			COLOR="33m"
+			;;
+		red)
+			COLOR="31m"
+			;;
+		iwhite)
+			COLOR="97m"
+			;;
+		*)
+			COLOR="0m"
+			;;
+    esac
+
+
+    STARTCOLOR="\e[$COLOR";
+    ENDCOLOR="\e[0m";
+
+    printf "$STARTCOLOR%$2b$ENDCOLOR" "$text";
+}
