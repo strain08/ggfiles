@@ -39,3 +39,5 @@ print_style () {
 
     printf "$STARTCOLOR%$2b$ENDCOLOR" "$text";
 }
+
+os=$(uname -s)

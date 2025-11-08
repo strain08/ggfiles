@@ -56,9 +56,12 @@ fi
 
 # Check if any files were found
 if [ ! -s "$tmpfile" ]; then
-    echo "No files found matching pattern"
-    rm "$tmpfile"
-    exit 1
+	echo "No files found matching pattern"
+	rm "$tmpfile"
+	exit 1
+else
+	echo "The following files will be restored:"
+	cat "$tmpfile"
 fi
 
 # Count and display files to be restored
