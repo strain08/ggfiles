@@ -20,11 +20,10 @@ if ! find . -type f | sed 's|^\./||' > "$tmp_filelist"; then
 	cat "$tmp_filelist"
 	echo ---
 fi
+
 print_style ">>> RSYNC\n" "" orange
 # Use rsync with the generated file list
 rsync -av --files-from="$tmp_filelist" / "$_WORK_DIR" 2>"$tmp_errors"
-print_style "<<< RSYNC\n" "" orange
-
 if [ $? -ne 0 ]; then
 	printf "There were errors updating backup files:\n"
 	cat "$tmp_errors" | grep -E "rsync:"
