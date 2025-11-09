@@ -36,14 +36,12 @@ rsync -avR "$file_to_add" "$_WORK_DIR"
 
 if [ -f "$file_to_add" ]; then
     # Single file
-	check_metadata_exists "$file" "$metadata_file"
-    [ $? -ne 0 ] && store_metadata "$file_to_add" "$metadata_file"
+    store_metadata "$file_to_add" "$metadata_file"
 
 elif [ -d "$file_to_add" ]; then
     # Directory - store metadata for all files
 	files_list=$(find "$file_to_add" -type f)
 	for file in $files_list; do
-		check_metadata_exists "$file" "$metadata_file"
-		[ $? -ne 0 ] && store_metadata "$file" "$metadata_file"
+		store_metadata "$file" "$metadata_file"
 	done
 fi

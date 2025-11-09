@@ -11,33 +11,38 @@ file_pattern\t: regular expression, applied to whole path.\n
 \t\tIf no regex_pattern is provided, all files are restored.\n
 "
 # COMMAND LINE >>>
-if [[ $1 == "--help" || $1 == "-h" ]]; then
-	echo -e $help
-	exit 0
-fi
 
-# Use --dry-run unless --doit is provided
-if [[ "$1" == "--doit" ]]; then
-    RSYNC_RUN=""
-	if [ -z "$2" ]; then
-		echo "Restoring all files from backup..."
-		specified_file=""
-	else
-		echo "Trying to restore specified file from backup: $2"
-		specified_file="$2"
-	fi
-else
-	# $1 is not --doit
-    RSYNC_RUN="--dry-run"
-	echo "** DRY RUN MODE ** Use --doit to do it."
-	if [ -z "$1" ]; then
-		echo "Restoring all files from backup..."
-		specified_file=""
-	else
-		echo "Trying to restore specified file from backup: $1"
-		specified_file="$1"
-	fi
-fi
+case $1 in
+
+	--help | -h)
+		printf $help
+		exit 0
+	;;
+
+	--doit)
+		RSYNC_RUN=""
+		if [ -z "$2" ]; then
+			echo "Restoring all files from backup..."
+			specified_file=""
+		else
+			echo "Searching backup for: " && print_style "$2\n" "" purple
+			specified_file="$2"
+		fi
+	;;
+
+	*)
+		RSYNC_RUN="--dry-run"
+		print_style "** DRY RUN MODE ** " "" "green" && echo "Use --doit to do it."
+		if [ -z "$1" ]; then
+			echo "Restoring all files from backup..."
+			specified_file=""
+		else
+			echo "Searching backup for: " && print_style "$1\n" "" purple
+			specified_file="$1"
+		fi
+	;;
+esac
+
 # COMMAND LINE <<<
 
 pwd_before_update=$(pwd)
@@ -61,7 +66,9 @@ if [ ! -s "$tmpfile" ]; then
 	exit 1
 else
 	echo "The following files will be restored:"
+	echo "---"
 	cat "$tmpfile"
+	echo "---"
 fi
 
 # Count and display files to be restored
@@ -69,7 +76,7 @@ count=$(wc -l < "$tmpfile")
 echo "Found $count files to restore"
 
 # Use rsync with --files-from
-rsync -av $RSYNC_RUN --files-from="$tmpfile" . /
+rsync -avq $RSYNC_RUN --files-from="$tmpfile" . /
 result=$?
 
 # cleanup
@@ -87,11 +94,12 @@ if [ -z "$RSYNC_RUN" ]; then
 	# Restore metadata (permissions and ownership)
 	metadata_file="$_LAYER_DIR/.permissions"
 	if [ -f "$metadata_file" ]; then
-		echo "Restoring file permissions and ownership..."
+		printf "Restoring file permissions and ownership..."
 		restore_metadata "$metadata_file"
+		echo "done."
 	else
 		echo "No metadata file found. File permissions preserved from rsync."
 	fi
 else
-    echo "Dry run completed. Use --doit to perform the actual restore"
+    print_style "Dry run completed." "" green && echo " Use --doit to perform the actual restore"
 fi

@@ -13,7 +13,8 @@ list_layers() {
 # prints colored text
 print_style () {
     local text=$1
-    local colorval=$2
+
+    local colorval=$3
 
     case $colorval in
 		purple)
@@ -48,15 +49,83 @@ store_metadata() {
     local file="$1"
     local metadata_file="$2"
 
+    # Get the new metadata line
+    local new_metadata
     if [ "$os" == "Linux" ]; then
-        stat -c "%n %a %u %g" "$file" >> "$metadata_file"
+        new_metadata=$(stat -c "%n %a %u %g" "$file")
     else
         # FreeBSD/macOS
-        stat -f "%N %Mp%Lp %u %g" "$file" >> "$metadata_file"
+        new_metadata=$(stat -f "%N %Mp%Lp %u %g" "$file")
+    fi
+
+    # Create metadata file if it doesn't exist
+    [ ! -f "$metadata_file" ] && touch "$metadata_file"
+
+    # Escape special characters in filename for sed pattern
+    local escaped_file=$(printf '%s\n' "$file" | sed 's/[[\.*^$(){}?+|/]/\\&/g')
+
+    # Check if entry exists and replace or append
+    if grep -q "^$escaped_file " "$metadata_file" 2>/dev/null; then
+        # Replace existing entry - handle OS differences in sed
+        if [ "$os" == "Linux" ]; then
+            sed -i "s|^$escaped_file .*|$new_metadata|" "$metadata_file"
+        else
+            # FreeBSD/macOS requires backup extension
+            sed -i '' "s|^$escaped_file .*|$new_metadata|" "$metadata_file"
+        fi
+    else
+        # Add new entry
+        echo "$new_metadata" >> "$metadata_file"
     fi
 }
 
-# Restore file metadata from metadata file
+# Delete file metadata entry
+delete_metadata() {
+    local file="$1"
+    local metadata_file="$2"
+
+    [ ! -f "$metadata_file" ] && return 0
+
+    # Escape special characters in filename for sed pattern
+    local escaped_file=$(printf '%s\n' "$file" | sed 's/[[\.*^$(){}?+|/]/\\&/g')
+
+    # Delete the line that starts with the file name
+    if [ "$os" == "Linux" ]; then
+        sed -i "/^$escaped_file /d" "$metadata_file"
+    else
+        # FreeBSD/macOS requires backup extension
+        sed -i '' "/^$escaped_file /d" "$metadata_file"
+    fi
+}
+
+# Remove metadata for files that no longer exist in backup
+cleanup_metadata() {
+    local backup_dir="$1"
+    local metadata_file="$2"
+
+    [ ! -f "$metadata_file" ] && return 0
+    [ ! -d "$backup_dir" ] && return 0
+
+    # Create a temporary file for cleaned metadata
+    local temp_file="${metadata_file}.cleanup_tmp"
+    > "$temp_file"
+
+    # Read each line from metadata file
+    while read -r file_path perms uid gid; do
+        [ -z "$file_path" ] && continue
+
+        # Check if the file exists in the backup directory
+        if [ -f "$backup_dir/$file_path" ]; then
+            # Keep this metadata entry
+            echo "$file_path $perms $uid $gid" >> "$temp_file"
+        fi
+    done < "$metadata_file"
+
+    # Replace original metadata file with cleaned version
+    mv "$temp_file" "$metadata_file"
+}
+
+# Restore files metadata from metadata file
 restore_metadata() {
     local metadata_file="$1"
 
@@ -88,15 +157,3 @@ check_metadata_exists() {
     return 1
 }
 
-# Generate relative file list for a given directory
-relative_file_list() {
-    local _path="$1"
-	local save_dir=$(pwd)
-
-    [ -z "$_path" ] && return 1
-    [ ! -d "$_path" ] && return 1
-
-    cd "$_path" || return 1
-    find . -type f ! -name ".permissions" | sed 's|^\./||'
-	cd "$save_dir"
-}

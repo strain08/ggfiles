@@ -8,45 +8,45 @@ cd "$_WORK_DIR" || exit 1
 
 printf "Updating backup file list ...\n"
 tmp_errors=$(mktemp)
-relative_file_list "$_WORK_DIR" | rsync -av  --files-from=- / "$_WORK_DIR" 2>$tmp_errors
-if [ $? -ne 0 ]; then
-	printf "There were errors updating backup files:\n"
-	cat $tmp_errors | egrep "rsync:"
-	rm $tmp_errors
+tmp_filelist=$(mktemp)
+
+# Generate file list and check for errors
+if ! find . -type f | sed 's|^\./||' > "$tmp_filelist"; then
+	printf "Error: Failed to generate file list from backup directory\n"
+	rm "$tmp_errors" "$tmp_filelist"
 	exit 1
 fi
 
-# Update metadata for all files in backup
-printf "Updating metadata...\n"
-metadata_file="$_LAYER_DIR/.permissions"
-> "$metadata_file"  # Clear existing metadata file
-find "$_WORK_DIR" -type f ! -name ".permissions" | while read -r backed_up_file; do
+# Use rsync with the generated file list
+rsync -av --files-from="$tmp_filelist" / "$_WORK_DIR" 2>"$tmp_errors"
+if [ $? -ne 0 ]; then
+	printf "There were errors updating backup files:\n"
+	cat "$tmp_errors" | grep -E "rsync:"
+	rm "$tmp_errors" "$tmp_filelist"
+	exit 1
+fi
+
+rm "$tmp_errors" "$tmp_filelist"
+
+
+printf "Updating metadata..."
+
+# remove metadata for files no longer present in backup
+cleanup_metadata "$_WORK_DIR" "$metadata_file"
+
+files_list=$(find "$_WORK_DIR" -type f)
+
+for backed_up_file in $files_list; do
+	printf "."
     # Convert backup path to original system path
     original_file="${backed_up_file#$_WORK_DIR}"
     if [ -f "$original_file" ]; then
+		# add or update metadata
         store_metadata "$original_file" "$metadata_file"
     fi
 done
 
-#files_list=$(find . -type f)
-
-#relative_file_list "$_WORK_DIR" | rsync -a --files-from=- / "$_WORK_DIR"
-
-# Update backed-up files
-# find . -type f | while read -r file; do
-#     # Remove leading ./ from file path
-#     rel_path="${file#./}"
-#     src_file="/$rel_path"
-#     dest_file="$_WORK_DIR/$rel_path"
-
-#     if [ -e "$src_file" ]; then
-#         echo "Updating backup of $src_file..."
-#         rsync -a "$src_file" "$dest_file"
-#     else
-#         echo "Source file $src_file no longer exists. Consider removing from backup."
-#     fi
-# done
-
-# Update permissions and ownership backed-up files and folders
 
 cd "$pwd_before_update" || exit 1
+
+printf "Done\n"
