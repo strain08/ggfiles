@@ -6,7 +6,7 @@ pwd_before_update=$(pwd)
 
 cd "$_WORK_DIR" || exit 1
 
-printf "Updating backup file list ...\n"
+printf "Updating files in backup ...\n"
 tmp_errors=$(mktemp)
 tmp_filelist=$(mktemp)
 
@@ -15,8 +15,12 @@ if ! find . -type f | sed 's|^\./||' > "$tmp_filelist"; then
 	printf "Error: Failed to generate file list from backup directory\n"
 	rm "$tmp_errors" "$tmp_filelist"
 	exit 1
+	else
+	echo ---
+	cat "$tmp_filelist"
+	echo ---
 fi
-
+print_style ">>> RSYNC\n" "" orange
 # Use rsync with the generated file list
 rsync -av --files-from="$tmp_filelist" / "$_WORK_DIR" 2>"$tmp_errors"
 if [ $? -ne 0 ]; then
@@ -25,6 +29,7 @@ if [ $? -ne 0 ]; then
 	rm "$tmp_errors" "$tmp_filelist"
 	exit 1
 fi
+print_style "<<< RSYNC\n" "" orange
 
 rm "$tmp_errors" "$tmp_filelist"
 
