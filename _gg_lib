@@ -83,24 +83,6 @@ store_metadata() {
     fi
 }
 
-# Delete file metadata entry
-delete_metadata() {
-    local file="$1"
-    local metadata_file="$2"
-
-    [ ! -f "$metadata_file" ] && return 0
-
-    # Escape special characters in filename for sed pattern
-    local escaped_file=$(printf '%s\n' "$file" | sed 's/[[\.*^$(){}?+|/]/\\&/g')
-
-    # Delete the line that starts with the file name
-    if [ "$os" == "Linux" ]; then
-        sed -i "/^$escaped_file /d" "$metadata_file"
-    else
-        # FreeBSD/macOS requires backup extension
-        sed -i '' "/^$escaped_file /d" "$metadata_file"
-    fi
-}
 
 # Remove metadata for files that no longer exist in backup
 cleanup_metadata() {
@@ -144,20 +126,4 @@ restore_metadata() {
     done < "$metadata_file"
 }
 
-# Check if metadata exists for a file
-check_metadata_exists() {
-    local file="$1"
-    local metadata_file="$2"
-
-
-    [ ! -f "$metadata_file" ] && return 1
-
-    while read -r stored_file _perms _uid _gid; do
-        if [ "$stored_file" = "$file" ]; then
-            return 0
-        fi
-    done < "$metadata_file"
-
-    return 1
-}
 

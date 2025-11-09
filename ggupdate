@@ -45,7 +45,7 @@ files_list=$(find "$_WORK_DIR" -type f)
 for backed_up_file in $files_list; do
 	printf "."
     # Convert backup path to original system path
-    original_file="${backed_up_file#$_WORK_DIR}"
+    original_file="${backed_up_file#"$_WORK_DIR"}"
     if [ -f "$original_file" ]; then
 		# add or update metadata
         store_metadata "$original_file" "$metadata_file"
