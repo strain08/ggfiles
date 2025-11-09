@@ -24,8 +24,8 @@ _WORK_DIR="$_LAYER_DIR/_root"
 metadata_file="$_LAYER_DIR/.permissions"
 
 if [ -d "$_WORK_DIR" ]; then
-	echo "Selected layer: $GG_LAYER"
-	echo "Working directory: $_WORK_DIR"
+	printf "Selected layer: \n" && print_style "$GG_LAYER\n" "" orange
+	printf "Working directory: \n" && print_style "$_WORK_DIR\n" "" orange
 else
 	echo "Working dir not found." && exit 1
 fi
