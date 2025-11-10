@@ -51,8 +51,11 @@ for backed_up_file in $files_list; do
         store_metadata "$original_file" "$metadata_file"
     fi
 done
-
+printf "Done\n"
 
 cd "$pwd_before_update" || exit 1
 
-printf "Done\n"
+# Generate HTML overview
+generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER"
+
+

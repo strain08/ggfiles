@@ -45,3 +45,6 @@ elif [ -d "$file_to_add" ]; then
 		store_metadata "$file" "$metadata_file"
 	done
 fi
+
+# Generate HTML overview
+generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER"
