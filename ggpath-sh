@@ -3,33 +3,10 @@
 # ggfiles init file for POSIX sh (dash, ash, etc.)
 
 # Source with: . /path/to/ggpath.sh
-
-
-
-# Try to get script directory
-
-if [ -n "$BASH_SOURCE" ]; then
-
-    # If somehow running in bash
-
-    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" 2>/dev/null && pwd )
-
-else
-
-    # POSIX sh fallback - try $0
-
-    SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
-
-    # If $0 doesn't work (common when sourcing), use PWD
-
-    if [ -z "$SCRIPT_DIR" ] || [ "$SCRIPT_DIR" = "/" ]; then
-
-        SCRIPT_DIR="$PWD"
-
-    fi
-
-fi
-
+# POSIX sh fallback - try $0
+    
+SCRIPT_DIR=`pwd`
+echo ${SCRIPT_DIR}
 
 
 # Check if _ggfiles is already in PATH (POSIX-compatible)

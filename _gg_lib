@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-echo _gg_lib:
+#echo "_gg_lib: "
 
 os=$(uname -s)
-
-# Default web root if GG_WEB_ROOT is not set
-: ${GG_WEB_ROOT:="https://localhost"}
 
 list_layers() {
 	for dir in "$GG_BACKUP_ROOT"/*/; do
@@ -142,6 +139,12 @@ generate_html_overview() {
     local total_files=0
     local total_size=0
     local generation_date=$(date)
+    if [ ! -f "$GG_BACKUP_ROOT/webroot.conf" ]; then
+        echo "$GG_BACKUP_ROOT/webroot.conf not found."
+        exit 1
+    fi
+    #source GG_WEB_ROOT
+    . "$GG_BACKUP_ROOT/webroot.conf"
 
     # Start HTML document
     cat > "$html_file" << 'EOF'

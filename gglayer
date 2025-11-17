@@ -27,7 +27,7 @@ GG_LAYER=$( echo "$1" | tr -d '[:space:]' )
 if [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ]; then
 	echo "Layer '$GG_LAYER' exists at $GG_BACKUP_ROOT/$GG_LAYER"
 	echo "Layer contents:"
-	tree "$GG_BACKUP_ROOT/$GG_LAYER/_root"
+	find "$GG_BACKUP_ROOT/$GG_LAYER/_root" -type f
 	echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
 	echo "Layer '$GG_LAYER' is now active."
 	exit 0
