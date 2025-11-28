@@ -134,14 +134,27 @@ fi
 if [ -z "$RSYNC_RUN" ]; then
     echo "Restore completed successfully."
 
-	# Restore metadata (permissions and ownership)
-	metadata_file="$_LAYER_DIR/.permissions"
-	if [ -f "$metadata_file" ]; then
-		printf "Restoring file permissions and ownership..."
-		restore_metadata "$metadata_file"
+	# Restore metadata (permissions and ownership) from both ROOT and HOME metadata files
+	metadata_root="$_LAYER_DIR/.permissions_root"
+	metadata_home="$_LAYER_DIR/.permissions_home"
+	metadata_found=0
+
+	if [ -f "$metadata_root" ]; then
+		printf "Restoring ROOT file permissions and ownership..."
+		restore_metadata "$metadata_root" "ROOT"
 		echo "done."
-	else
-		echo "No metadata file found. File permissions preserved from rsync."
+		metadata_found=1
+	fi
+
+	if [ -f "$metadata_home" ]; then
+		printf "Restoring HOME file permissions and ownership..."
+		restore_metadata "$metadata_home" "HOME"
+		echo "done."
+		metadata_found=1
+	fi
+
+	if [ $metadata_found -eq 0 ]; then
+		echo "No metadata files found. File permissions preserved from rsync."
 	fi
 else
     print_style "Dry run completed." "" green && echo " Use --doit to perform the actual restore"

@@ -51,17 +51,16 @@ if [ "$is_home" == "true" ]; then
     rsync -avR "$relative_path" "$_HOME_DIR/"
     rsync_result=$?
 
-    # Store metadata with HOME type
-    metadata_file="$_LAYER_DIR/.permissions"
     printf "Backing up metadata (HOME)..."
 
     if [ -f "$file_to_add" ]; then
-        store_metadata "$relative_path" "$metadata_file" "HOME"
+        # New signature: store_metadata(file, file_type)
+        store_metadata "$relative_path" "HOME"
     elif [ -d "$file_to_add" ]; then
         files_list=$(find "$file_to_add" -type f)
         for file in $files_list; do
             rel_file=$(get_home_relative_path "$file")
-            store_metadata "$rel_file" "$metadata_file" "HOME"
+            store_metadata "$rel_file" "HOME"
         done
     fi
 
@@ -72,16 +71,15 @@ else
     rsync -avR "$file_to_add" "$_WORK_DIR"
     rsync_result=$?
 
-    # Store metadata with ROOT type
-    metadata_file="$_LAYER_DIR/.permissions"
     printf "Backing up metadata (ROOT)..."
 
     if [ -f "$file_to_add" ]; then
-        store_metadata "$file_to_add" "$metadata_file" "ROOT"
+        # New signature: store_metadata(file, file_type)
+        store_metadata "$file_to_add" "ROOT"
     elif [ -d "$file_to_add" ]; then
         files_list=$(find "$file_to_add" -type f)
         for file in $files_list; do
-            store_metadata "$file" "$metadata_file" "ROOT"
+            store_metadata "$file" "ROOT"
         done
     fi
 fi

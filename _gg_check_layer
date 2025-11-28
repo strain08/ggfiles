@@ -22,7 +22,8 @@ _WORK_DIR=$GG_BACKUP_ROOT
 _LAYER_DIR="$_WORK_DIR$GG_LAYER"
 _WORK_DIR="$_LAYER_DIR/_root"
 _HOME_DIR="$_LAYER_DIR/_home"
-metadata_file="$_LAYER_DIR/.permissions"
+metadata_file_root="$_LAYER_DIR/.permissions_root"
+metadata_file_home="$_LAYER_DIR/.permissions_home"
 
 if [ -d "$_WORK_DIR" ]; then
 	printf "Selected layer: " && print_style "$GG_LAYER\n" "" orange
@@ -40,3 +41,5 @@ fi
 
 # Export for use in other commands
 export _HOME_DIR
+export metadata_file_root
+export metadata_file_home

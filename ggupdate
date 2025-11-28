@@ -3,7 +3,6 @@
 . $(which _gg_check_layer)
 
 pwd_before_update=$(pwd)
-metadata_file="$_LAYER_DIR/.permissions"
 
 # Update ROOT files
 echo "Updating ROOT files in backup..."
@@ -73,9 +72,10 @@ fi
 
 printf "Updating metadata...\n"
 
-# cleanup metadata for ROOT files
+# cleanup and update ROOT metadata
+metadata_root="$_LAYER_DIR/.permissions_root"
 printf "Cleaning ROOT metadata..."
-cleanup_metadata "$_WORK_DIR" "$metadata_file" "ROOT"
+cleanup_metadata "$_WORK_DIR" "$metadata_root" "ROOT"
 
 # Update ROOT metadata
 files_list=$(find "$_WORK_DIR" -type f 2>/dev/null)
@@ -84,16 +84,17 @@ for backed_up_file in $files_list; do
     # Convert backup path to original system path
     original_file="${backed_up_file#"$_WORK_DIR"}"
     if [ -f "$original_file" ]; then
-		# add or update metadata
-        store_metadata "$original_file" "$metadata_file" "ROOT"
+		# add or update metadata - new signature: store_metadata(file, file_type)
+        store_metadata "$original_file" "ROOT"
     fi
 done
 printf "Done\n"
 
 # cleanup and update HOME metadata
 if [ -d "$_HOME_DIR" ]; then
+    metadata_home="$_LAYER_DIR/.permissions_home"
     printf "Cleaning HOME metadata..."
-    cleanup_metadata "$_HOME_DIR" "$metadata_file" "HOME"
+    cleanup_metadata "$_HOME_DIR" "$metadata_home" "HOME"
 
     # Update HOME metadata
     cd "$_HOME_DIR" || exit 1
@@ -103,8 +104,8 @@ if [ -d "$_HOME_DIR" ]; then
         # Convert backup path to relative path
         relative_file="${backed_up_file#./}"
         if [ -f "$HOME/$relative_file" ]; then
-            # Store with HOME type
-            store_metadata "$relative_file" "$metadata_file" "HOME"
+            # Store with HOME type - new signature: store_metadata(file, file_type)
+            store_metadata "$relative_file" "HOME"
         fi
     done
     printf "Done\n"

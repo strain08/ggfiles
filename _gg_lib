@@ -101,13 +101,33 @@ get_home_relative_path() {
     fi
 }
 
+# Get the correct metadata file path based on file type
+get_metadata_file() {
+    local file_type="${1:-ROOT}"  # Default to ROOT
+
+    if [ -z "$_LAYER_DIR" ]; then
+        echo "Error: _LAYER_DIR not set" >&2
+        return 1
+    fi
+
+    if [ "$file_type" == "HOME" ]; then
+        echo "$_LAYER_DIR/.permissions_home"
+    else
+        echo "$_LAYER_DIR/.permissions_root"
+    fi
+}
+
 # Store file metadata (permissions and ownership)
+# New signature: store_metadata(file, file_type) - metadata file is determined internally
 store_metadata() {
     local file="$1"
-    local metadata_file="$2"
-    local file_type="${3:-ROOT}"  # Default to ROOT, can be HOME
+    local file_type="${2:-ROOT}"  # Default to ROOT, can be HOME
 
-    # Get the new metadata line
+    # Get the correct metadata file based on type
+    local metadata_file
+    metadata_file=$(get_metadata_file "$file_type") || return 1
+
+    # Get the new metadata line (without type annotation)
     local new_metadata
     if [ "$os" == "Linux" ]; then
         new_metadata=$(stat -c "%n %a %u %g" "$file")
@@ -115,9 +135,6 @@ store_metadata() {
         # FreeBSD/macOS
         new_metadata=$(stat -f "%N %Mp%Lp %u %g" "$file")
     fi
-
-    # Append type annotation: filepath|TYPE perms uid gid
-    new_metadata="$new_metadata|$file_type"
 
     # Create metadata file if it doesn't exist
     [ ! -f "$metadata_file" ] && touch "$metadata_file"
@@ -144,10 +161,11 @@ store_metadata() {
 
 
 # Remove metadata for files that no longer exist in backup
+# Simplified: no type filtering needed since each metadata file is dedicated to one type
 cleanup_metadata() {
     local backup_dir="$1"
     local metadata_file="$2"
-    local file_type="${3:-ROOT}"  # Default to ROOT, can be HOME
+    local file_type="${3:-ROOT}"  # Kept for compatibility but not used for filtering
 
     [ ! -f "$metadata_file" ] && return 0
     [ ! -d "$backup_dir" ] && return 0
@@ -157,36 +175,20 @@ cleanup_metadata() {
     > "$temp_file"
 
     # Read each line from metadata file
+    # Since metadata file is dedicated to one type, we just check file existence
     while read -r line; do
         [ -z "$line" ] && continue
 
-        # Parse: filepath perms uid gid|TYPE (new format) or filepath perms uid gid (old format)
+        # Parse: filepath perms uid gid (simplified format, no type annotation)
         local file_path
-        local stored_type
+        file_path=$(echo "$line" | awk '{print $1}')
 
-        if [[ "$line" =~ \| ]]; then
-            # New format with type annotation: filepath perms uid gid|TYPE
-            # Extract type (after the pipe)
-            stored_type=$(echo "$line" | cut -d'|' -f2)
-            # Extract filepath (first field before the pipe)
-            file_path=$(echo "$line" | cut -d'|' -f1 | awk '{print $1}')
-        else
-            # Old format without type annotation - treat as ROOT
-            file_path=$(echo "$line" | awk '{print $1}')
-            stored_type="ROOT"
-        fi
-
-        # If type matches our target type, only keep if file still exists
-        if [ "$stored_type" == "$file_type" ]; then
-            if [ -f "$backup_dir/$file_path" ]; then
-                # Keep this metadata entry if file exists in backup
-                echo "$line" >> "$temp_file"
-            fi
-            # Skip entries whose files no longer exist in backup
-        else
-            # Keep entries that don't match our target type (preserve other types)
+        # Check if the file exists in the backup directory
+        if [ -f "$backup_dir/$file_path" ]; then
+            # Keep this metadata entry if file exists in backup
             echo "$line" >> "$temp_file"
         fi
+        # Skip entries whose files no longer exist in backup
     done < "$metadata_file"
 
     # Replace original metadata file with cleaned version
@@ -194,39 +196,28 @@ cleanup_metadata() {
 }
 
 # Restore files metadata from metadata file
+# New signature: restore_metadata(metadata_file, file_type)
 restore_metadata() {
     local metadata_file="$1"
+    local file_type="${2:-ROOT}"  # ROOT or HOME - determines ownership behavior
 
     [ ! -f "$metadata_file" ] && return 0
 
     while read -r line; do
         [ -z "$line" ] && continue
 
-        # Parse: filepath perms uid gid|TYPE (new format) or filepath perms uid gid (old format)
+        # Parse simplified format: filepath perms uid gid (no type annotation)
         local file
         local perms
         local uid
         local gid
-        local file_type
 
-        if [[ "$line" =~ \| ]]; then
-            # New format with type annotation: filepath perms uid gid|TYPE
-            local metadata_part=$(echo "$line" | cut -d'|' -f1)
-            file_type=$(echo "$line" | cut -d'|' -f2)
-            file=$(echo "$metadata_part" | awk '{print $1}')
-            perms=$(echo "$metadata_part" | awk '{print $2}')
-            uid=$(echo "$metadata_part" | awk '{print $3}')
-            gid=$(echo "$metadata_part" | awk '{print $4}')
-        else
-            # Old format without type annotation - treat as ROOT
-            file=$(echo "$line" | awk '{print $1}')
-            perms=$(echo "$line" | awk '{print $2}')
-            uid=$(echo "$line" | awk '{print $3}')
-            gid=$(echo "$line" | awk '{print $4}')
-            file_type="ROOT"
-        fi
+        file=$(echo "$line" | awk '{print $1}')
+        perms=$(echo "$line" | awk '{print $2}')
+        uid=$(echo "$line" | awk '{print $3}')
+        gid=$(echo "$line" | awk '{print $4}')
 
-        # For HOME files, use current user's uid/gid
+        # For HOME files, override stored uid/gid with current user
         if [ "$file_type" == "HOME" ]; then
             uid=$(id -u)
             gid=$(id -g)
