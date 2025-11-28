@@ -48,10 +48,64 @@ print_style () {
     printf "$STARTCOLOR%$2b$ENDCOLOR" "$text";
 }
 
+# Detect if a file is in the user's home directory
+detect_home_file() {
+    local file_path="$1"
+
+    # Ensure HOME is set and absolute
+    if [ -z "$HOME" ] || [[ ! "$HOME" =~ ^/ ]]; then
+        echo "false"
+        return
+    fi
+
+    # Normalize the path (resolve symlinks)
+    local normalized
+    if [ "$os" == "Linux" ]; then
+        normalized=$(realpath "$file_path" 2>/dev/null)
+    else
+        normalized=$(realpath -q "$file_path" 2>/dev/null)
+    fi
+
+    [ -z "$normalized" ] && echo "false" && return
+
+    # Check if file is under HOME directory
+    if [[ "$normalized" == "$HOME" ]] || [[ "$normalized" == "$HOME"/* ]]; then
+        echo "true"
+    else
+        echo "false"
+    fi
+}
+
+# Get relative path from HOME directory
+get_home_relative_path() {
+    local file_path="$1"
+
+    # Normalize the path
+    local normalized
+    if [ "$os" == "Linux" ]; then
+        normalized=$(realpath "$file_path" 2>/dev/null)
+    else
+        normalized=$(realpath -q "$file_path" 2>/dev/null)
+    fi
+
+    [ -z "$normalized" ] && echo "" && return
+
+    # Strip HOME prefix
+    local relative="${normalized#$HOME/}"
+
+    # If path is exactly HOME, return "."
+    if [ "$relative" == "$normalized" ]; then
+        echo "."
+    else
+        echo "$relative"
+    fi
+}
+
 # Store file metadata (permissions and ownership)
 store_metadata() {
     local file="$1"
     local metadata_file="$2"
+    local file_type="${3:-ROOT}"  # Default to ROOT, can be HOME
 
     # Get the new metadata line
     local new_metadata
@@ -62,20 +116,25 @@ store_metadata() {
         new_metadata=$(stat -f "%N %Mp%Lp %u %g" "$file")
     fi
 
+    # Append type annotation: filepath|TYPE perms uid gid
+    new_metadata="$new_metadata|$file_type"
+
     # Create metadata file if it doesn't exist
     [ ! -f "$metadata_file" ] && touch "$metadata_file"
 
     # Escape special characters in filename for sed pattern
     local escaped_file=$(printf '%s\n' "$file" | sed 's/[[\.*^$(){}?+|/]/\\&/g')
+    # Escape special characters for sed replacement (escape backslash and hash since we use # as delimiter)
+    local escaped_metadata=$(printf '%s\n' "$new_metadata" | sed 's/[\\#]/\\&/g')
 
     # Check if entry exists and replace or append
     if grep -q "^$escaped_file " "$metadata_file" 2>/dev/null; then
-        # Replace existing entry - handle OS differences in sed
+        # Replace existing entry - use # as delimiter (works on both Linux and FreeBSD)
         if [ "$os" == "Linux" ]; then
-            sed -i "s|^$escaped_file .*|$new_metadata|" "$metadata_file"
+            sed -i "s#^$escaped_file .*#$escaped_metadata#" "$metadata_file"
         else
             # FreeBSD/macOS requires backup extension
-            sed -i '' "s|^$escaped_file .*|$new_metadata|" "$metadata_file"
+            sed -i '' "s#^$escaped_file .*#$escaped_metadata#" "$metadata_file"
         fi
     else
         # Add new entry
@@ -88,6 +147,7 @@ store_metadata() {
 cleanup_metadata() {
     local backup_dir="$1"
     local metadata_file="$2"
+    local file_type="${3:-ROOT}"  # Default to ROOT, can be HOME
 
     [ ! -f "$metadata_file" ] && return 0
     [ ! -d "$backup_dir" ] && return 0
@@ -97,13 +157,35 @@ cleanup_metadata() {
     > "$temp_file"
 
     # Read each line from metadata file
-    while read -r file_path perms uid gid; do
-        [ -z "$file_path" ] && continue
+    while read -r line; do
+        [ -z "$line" ] && continue
 
-        # Check if the file exists in the backup directory
-        if [ -f "$backup_dir/$file_path" ]; then
-            # Keep this metadata entry
-            echo "$file_path $perms $uid $gid" >> "$temp_file"
+        # Parse: filepath perms uid gid|TYPE (new format) or filepath perms uid gid (old format)
+        local file_path
+        local stored_type
+
+        if [[ "$line" =~ \| ]]; then
+            # New format with type annotation: filepath perms uid gid|TYPE
+            # Extract type (after the pipe)
+            stored_type=$(echo "$line" | cut -d'|' -f2)
+            # Extract filepath (first field before the pipe)
+            file_path=$(echo "$line" | cut -d'|' -f1 | awk '{print $1}')
+        else
+            # Old format without type annotation - treat as ROOT
+            file_path=$(echo "$line" | awk '{print $1}')
+            stored_type="ROOT"
+        fi
+
+        # If type matches our target type, only keep if file still exists
+        if [ "$stored_type" == "$file_type" ]; then
+            if [ -f "$backup_dir/$file_path" ]; then
+                # Keep this metadata entry if file exists in backup
+                echo "$line" >> "$temp_file"
+            fi
+            # Skip entries whose files no longer exist in backup
+        else
+            # Keep entries that don't match our target type (preserve other types)
+            echo "$line" >> "$temp_file"
         fi
     done < "$metadata_file"
 
@@ -117,8 +199,39 @@ restore_metadata() {
 
     [ ! -f "$metadata_file" ] && return 0
 
-    while read -r file perms uid gid; do
-        [ -z "$file" ] && continue
+    while read -r line; do
+        [ -z "$line" ] && continue
+
+        # Parse: filepath perms uid gid|TYPE (new format) or filepath perms uid gid (old format)
+        local file
+        local perms
+        local uid
+        local gid
+        local file_type
+
+        if [[ "$line" =~ \| ]]; then
+            # New format with type annotation: filepath perms uid gid|TYPE
+            local metadata_part=$(echo "$line" | cut -d'|' -f1)
+            file_type=$(echo "$line" | cut -d'|' -f2)
+            file=$(echo "$metadata_part" | awk '{print $1}')
+            perms=$(echo "$metadata_part" | awk '{print $2}')
+            uid=$(echo "$metadata_part" | awk '{print $3}')
+            gid=$(echo "$metadata_part" | awk '{print $4}')
+        else
+            # Old format without type annotation - treat as ROOT
+            file=$(echo "$line" | awk '{print $1}')
+            perms=$(echo "$line" | awk '{print $2}')
+            uid=$(echo "$line" | awk '{print $3}')
+            gid=$(echo "$line" | awk '{print $4}')
+            file_type="ROOT"
+        fi
+
+        # For HOME files, use current user's uid/gid
+        if [ "$file_type" == "HOME" ]; then
+            uid=$(id -u)
+            gid=$(id -g)
+        fi
+
         if [ -e "$file" ]; then
             chmod "$perms" "$file" 2>/dev/null || echo "Warning: Could not set permissions on $file"
             chown "$uid:$gid" "$file" 2>/dev/null || echo "Warning: Could not set ownership on $file (may need sudo)"
@@ -131,9 +244,10 @@ generate_html_overview() {
     local work_dir="$1"
     local layer_dir="$2"
     local layer_name="$3"
+    local home_dir="${4:-}"  # Optional home directory
     local html_file="$layer_dir/content.html"
 
-    [ ! -d "$work_dir" ] && return 1
+    [ ! -d "$work_dir" ] && [ -z "$home_dir" ] && return 1
 
     # Get total file count and size
     local total_files=0
@@ -205,30 +319,48 @@ EOF
     echo "                <span>📁 Layer: <strong>$layer_name</strong></span>" >> "$html_file"
     echo "                <span>🕐 Generated: $generation_date</span>" >> "$html_file"
 
-    # Calculate stats
+    # Calculate stats for both _root/ and _home/
+    local root_files=0
+    local root_size=0
+    local home_files=0
+    local home_size=0
+
     if [ -d "$work_dir" ]; then
         cd "$work_dir" || return 1
-        total_files=$(find . -type f | wc -l)
+        root_files=$(find . -type f 2>/dev/null | wc -l)
         if [ "$os" == "Linux" ]; then
-            total_size=$(find . -type f -exec stat -c%s {} \; | awk '{sum+=$1} END {print sum}')
+            root_size=$(find . -type f 2>/dev/null -exec stat -c%s {} \; | awk '{sum+=$1} END {print sum}')
         else
-            total_size=$(find . -type f -exec stat -f%z {} \; | awk '{sum+=$1} END {print sum}')
+            root_size=$(find . -type f 2>/dev/null -exec stat -f%z {} \; | awk '{sum+=$1} END {print sum}')
         fi
-
-        # Convert bytes to human readable
-        if [ "$total_size" -gt 1073741824 ]; then
-            size_display="$(( total_size / 1073741824 )) GB"
-        elif [ "$total_size" -gt 1048576 ]; then
-            size_display="$(( total_size / 1048576 )) MB"
-        elif [ "$total_size" -gt 1024 ]; then
-            size_display="$(( total_size / 1024 )) KB"
-        else
-            size_display="$total_size bytes"
-        fi
-
-        echo "                <span>📄 Files: <strong>$total_files</strong></span>" >> "$html_file"
-        echo "                <span>💾 Size: <strong>$size_display</strong></span>" >> "$html_file"
     fi
+
+    if [ -n "$home_dir" ] && [ -d "$home_dir" ]; then
+        cd "$home_dir" || return 1
+        home_files=$(find . -type f 2>/dev/null | wc -l)
+        if [ "$os" == "Linux" ]; then
+            home_size=$(find . -type f 2>/dev/null -exec stat -c%s {} \; | awk '{sum+=$1} END {print sum}')
+        else
+            home_size=$(find . -type f 2>/dev/null -exec stat -f%z {} \; | awk '{sum+=$1} END {print sum}')
+        fi
+    fi
+
+    total_files=$((root_files + home_files))
+    total_size=$((root_size + home_size))
+
+    # Convert bytes to human readable
+    if [ "$total_size" -gt 1073741824 ]; then
+        size_display="$(( total_size / 1073741824 )) GB"
+    elif [ "$total_size" -gt 1048576 ]; then
+        size_display="$(( total_size / 1048576 )) MB"
+    elif [ "$total_size" -gt 1024 ]; then
+        size_display="$(( total_size / 1024 )) KB"
+    else
+        size_display="$total_size bytes"
+    fi
+
+    echo "                <span>📄 Files: <strong>$total_files</strong> (System: $root_files, Home: $home_files)</span>" >> "$html_file"
+    echo "                <span>💾 Size: <strong>$size_display</strong></span>" >> "$html_file"
 
     cat >> "$html_file" << 'EOF'
             </div>
@@ -239,32 +371,46 @@ EOF
         <div class="content">
 EOF
 
-    # Generate file tree
-    if [ -d "$work_dir" ]; then
-        cd "$work_dir" || return 1
+    # Function to generate file tree for a directory
+    generate_tree_section() {
+        local dir="$1"
+        local section_name="$2"
+        local section_id="$3"
+        local url_prefix="$4"
+
+        echo "            <h2 style=\"margin-top: 20px; border-top: 2px solid #eee; padding-top: 10px;\">$section_name</h2>" >> "$html_file"
+        echo "            <div id=\"$section_id\">" >> "$html_file"
+
+        if [ ! -d "$dir" ]; then
+            echo "                <p style=\"color: #7f8c8d; font-style: italic;\">No backups in this section</p>" >> "$html_file"
+            echo "            </div>" >> "$html_file"
+            return
+        fi
+
+        cd "$dir" || return 1
 
         # Create directory structure
-        find . -type d | sort | while read -r dir; do
-            [ "$dir" = "." ] && continue
+        find . -type d | sort | while read -r subdir; do
+            [ "$subdir" = "." ] && continue
 
-            dir_name=$(basename "$dir")
-            dir_path=${dir#./}
+            dir_name=$(basename "$subdir")
+            dir_path=${subdir#./}
             dir_level=$(echo "$dir_path" | tr -cd '/' | wc -c)
 
-            echo "            <div class=\"folder\" style=\"margin-left: ${dir_level}0px;\">" >> "$html_file"
-            echo "                <div class=\"folder-header\" onclick=\"toggleFolder(this)\">" >> "$html_file"
-            echo "                    <span class=\"folder-icon\">📁</span>" >> "$html_file"
-            echo "                    <span>$dir_name/</span>" >> "$html_file"
-            echo "                </div>" >> "$html_file"
-            echo "                <div class=\"folder-content\">" >> "$html_file"
+            echo "                <div class=\"folder\" style=\"margin-left: ${dir_level}0px;\">" >> "$html_file"
+            echo "                    <div class=\"folder-header\" onclick=\"toggleFolder(this)\">" >> "$html_file"
+            echo "                        <span class=\"folder-icon\">📁</span>" >> "$html_file"
+            echo "                        <span>$dir_name/</span>" >> "$html_file"
+            echo "                    </div>" >> "$html_file"
+            echo "                    <div class=\"folder-content\">" >> "$html_file"
 
             # Add files in this directory
-            find "$dir" -maxdepth 1 -type f | sort | while read -r file; do
+            find "$subdir" -maxdepth 1 -type f | sort | while read -r file; do
                 [ ! -f "$file" ] && continue
 
                 file_name=$(basename "$file")
                 file_path=${file#./}
-                web_url="$GG_WEB_ROOT/$(basename $GG_BACKUP_ROOT)/$layer_name/_root/$file_path"
+                web_url="$url_prefix/$file_path"
 
                 # Get file metadata
                 if [ "$os" == "Linux" ]; then
@@ -286,24 +432,24 @@ EOF
                     size_display="$file_size B"
                 fi
 
-                echo "                    <div class=\"file\">" >> "$html_file"
-                echo "                        <span class=\"file-icon\">📄</span>" >> "$html_file"
-                echo "                        <span class=\"file-name\"><a href=\"$web_url\" target=\"_blank\">$file_name</a></span>" >> "$html_file"
-                echo "                        <span class=\"file-meta\">$size_display | $file_perms | $file_mtime</span>" >> "$html_file"
-                echo "                    </div>" >> "$html_file"
+                echo "                        <div class=\"file\">" >> "$html_file"
+                echo "                            <span class=\"file-icon\">📄</span>" >> "$html_file"
+                echo "                            <span class=\"file-name\"><a href=\"$web_url\" target=\"_blank\">$file_name</a></span>" >> "$html_file"
+                echo "                            <span class=\"file-meta\">$size_display | $file_perms | $file_mtime</span>" >> "$html_file"
+                echo "                        </div>" >> "$html_file"
             done
 
+            echo "                    </div>" >> "$html_file"
             echo "                </div>" >> "$html_file"
-            echo "            </div>" >> "$html_file"
         done
 
-        # Add files in root directory
+        # Add files in root directory of section
         find . -maxdepth 1 -type f | sort | while read -r file; do
             [ ! -f "$file" ] && continue
 
             file_name=$(basename "$file")
             file_path=${file#./}
-            web_url="$GG_WEB_ROOT/$layer_name/_root/$file_path"
+            web_url="$url_prefix/$file_path"
 
             # Get file metadata
             if [ "$os" == "Linux" ]; then
@@ -325,12 +471,25 @@ EOF
                 size_display="$file_size B"
             fi
 
-            echo "            <div class=\"file\">" >> "$html_file"
-            echo "                <span class=\"file-icon\">📄</span>" >> "$html_file"
-            echo "                <span class=\"file-name\"><a href=\"$web_url\" target=\"_blank\">$file_name</a></span>" >> "$html_file"
-            echo "                <span class=\"file-meta\">$size_display | $file_perms | $file_mtime</span>" >> "$html_file"
-            echo "            </div>" >> "$html_file"
+            echo "                <div class=\"file\">" >> "$html_file"
+            echo "                    <span class=\"file-icon\">📄</span>" >> "$html_file"
+            echo "                    <span class=\"file-name\"><a href=\"$web_url\" target=\"_blank\">$file_name</a></span>" >> "$html_file"
+            echo "                    <span class=\"file-meta\">$size_display | $file_perms | $file_mtime</span>" >> "$html_file"
+            echo "                </div>" >> "$html_file"
         done
+
+        echo "            </div>" >> "$html_file"
+    }
+
+    # Generate sections for ROOT and HOME files
+    if [ -d "$work_dir" ]; then
+        local root_url="$GG_WEB_ROOT/$(basename $GG_BACKUP_ROOT)/$layer_name/_root"
+        generate_tree_section "$work_dir" "System Files (/root)" "root-section" "$root_url"
+    fi
+
+    if [ -n "$home_dir" ] && [ -d "$home_dir" ]; then
+        local home_url="$GG_WEB_ROOT/$(basename $GG_BACKUP_ROOT)/$layer_name/_home"
+        generate_tree_section "$home_dir" "Home Directory Files (~)" "home-section" "$home_url"
     fi
 
     # Close HTML document

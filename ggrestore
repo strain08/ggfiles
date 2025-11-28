@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 
 . $(which _gg_check_root)
-. $(which _gg_check_layer) # provides $_WORK_DIR
+. $(which _gg_check_layer) # provides $_WORK_DIR and $_HOME_DIR
 
 help="
-Usage: ggrestore [--doit] [file_pattern]\n
-Restores files from the backup directory to their original locations.\n
---doit\t\t: Restores files. If not specified, script runs in dry-run mode.\n
-file_pattern\t: regular expression, applied to whole path.\n
-\t\tIf no regex_pattern is provided, all files are restored.\n
+Usage: ggrestore [--doit] [file_pattern]
+Restores files from the backup directory to their original locations.
+--doit\t\t: Restores files. If not specified, script runs in dry-run mode.
+file_pattern\t: regular expression, applied to whole path.
+\t\tIf no regex_pattern is provided, all files are restored.
 "
 # COMMAND LINE >>>
 
 case $1 in
 
 	--help | -h)
-		printf $help
+		printf "$help"
 		exit 0
 	;;
 
@@ -45,46 +45,89 @@ esac
 
 # COMMAND LINE <<<
 
-pwd_before_update=$(pwd)
-cd "$_WORK_DIR"
+pwd_before_restore=$(pwd)
 
+# Create temporary files for ROOT and HOME file lists
+tmpfile_root=$(mktemp)
+tmpfile_home=$(mktemp)
 
-tmpfile=$(mktemp)
-# Write all found files to the temporary file, stripping leading ./
+# Collect files from _root/
+echo "Scanning _root/ backups..."
+cd "$_WORK_DIR" || exit 1
 if [ -z "$specified_file" ]; then
     # If no pattern specified, get all files
-    find . -type f | sed 's|^./||' > "$tmpfile"
+    find . -type f 2>/dev/null | sed 's|^./||' > "$tmpfile_root"
 else
-    # Use grep -E instead of egrep for better compatibility
-    find . -type f | grep -E "$specified_file" | sed 's|^./||' > "$tmpfile"
+    # Use grep -E for pattern matching
+    find . -type f 2>/dev/null | grep -E "$specified_file" | sed 's|^./||' > "$tmpfile_root"
+fi
+
+# Collect files from _home/
+echo "Scanning _home/ backups..."
+if [ -d "$_HOME_DIR" ]; then
+    cd "$_HOME_DIR" || exit 1
+    if [ -z "$specified_file" ]; then
+        find . -type f 2>/dev/null | sed 's|^./||' > "$tmpfile_home"
+    else
+        find . -type f 2>/dev/null | grep -E "$specified_file" | sed 's|^./||' > "$tmpfile_home"
+    fi
+else
+    > "$tmpfile_home"
 fi
 
 # Check if any files were found
-if [ ! -s "$tmpfile" ]; then
+if [ ! -s "$tmpfile_root" ] && [ ! -s "$tmpfile_home" ]; then
 	echo "No files found matching pattern"
-	rm "$tmpfile"
+	rm "$tmpfile_root" "$tmpfile_home"
 	exit 1
-else
-	echo "The following files will be restored:"
-	echo "---"
-	cat "$tmpfile"
-	echo "---"
 fi
 
-# Count and display files to be restored
-count=$(wc -l < "$tmpfile")
-echo "Found $count files to restore"
+# Display files to be restored
+echo "The following files will be restored:"
+echo "---"
+if [ -s "$tmpfile_root" ]; then
+    echo "FROM ROOT (_root/):"
+    cat "$tmpfile_root" | sed 's/^/  /'
+fi
+if [ -s "$tmpfile_home" ]; then
+    echo "FROM HOME (_home/):"
+    cat "$tmpfile_home" | sed 's/^/  /'
+fi
+echo "---"
 
-# Use rsync with --files-from
-rsync -avq $RSYNC_RUN --files-from="$tmpfile" . /
-result=$?
+# Count and display files to be restored
+count_root=$(wc -l < "$tmpfile_root" 2>/dev/null || echo 0)
+count_home=$(wc -l < "$tmpfile_home" 2>/dev/null || echo 0)
+total_count=$((count_root + count_home))
+echo "Found $total_count files to restore (ROOT: $count_root, HOME: $count_home)"
+
+# Restore ROOT files (absolute paths to /)
+result_root=0
+if [ -s "$tmpfile_root" ]; then
+    echo "Restoring ROOT files..."
+    cd "$_WORK_DIR" || exit 1
+    rsync -avq $RSYNC_RUN --files-from="$tmpfile_root" . /
+    result_root=$?
+fi
+
+# Restore HOME files (relative paths to HOME)
+result_home=0
+if [ -s "$tmpfile_home" ]; then
+    echo "Restoring HOME files..."
+    if [ -d "$_HOME_DIR" ]; then
+        cd "$_HOME_DIR" || exit 1
+        rsync -avq $RSYNC_RUN --files-from="$tmpfile_home" . "$HOME/"
+        result_home=$?
+    fi
+fi
 
 # cleanup
-rm "$tmpfile"
-cd "$pwd_before_update"
+rm "$tmpfile_root" "$tmpfile_home"
+cd "$pwd_before_restore" || exit 1
 
-if [ $result -ne 0 ]; then
-	echo Errors encountred during restore.
+# Check for errors
+if [ $result_root -ne 0 ] || [ $result_home -ne 0 ]; then
+	echo "Errors encountered during restore."
 	exit 1
 fi
 

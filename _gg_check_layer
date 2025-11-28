@@ -21,11 +21,22 @@ _WORK_DIR=$GG_BACKUP_ROOT
 
 _LAYER_DIR="$_WORK_DIR$GG_LAYER"
 _WORK_DIR="$_LAYER_DIR/_root"
+_HOME_DIR="$_LAYER_DIR/_home"
 metadata_file="$_LAYER_DIR/.permissions"
 
 if [ -d "$_WORK_DIR" ]; then
 	printf "Selected layer: " && print_style "$GG_LAYER\n" "" orange
-	printf "Working directory: " && print_style "$_WORK_DIR\n" "" orange
+	printf "Working directory: " && print_style "$_LAYER_DIR\n" "" orange
 else
 	echo "Working dir not found." && exit 1
 fi
+
+# Ensure _home/ directory exists (create if missing)
+if [ ! -d "$_HOME_DIR" ]; then
+	mkdir -p "$_HOME_DIR" 2>/dev/null || {
+		echo "Warning: Could not create _home directory at $_HOME_DIR"
+	}
+fi
+
+# Export for use in other commands
+export _HOME_DIR

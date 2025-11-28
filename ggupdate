@@ -3,7 +3,10 @@
 . $(which _gg_check_layer)
 
 pwd_before_update=$(pwd)
+metadata_file="$_LAYER_DIR/.permissions"
 
+# Update ROOT files
+echo "Updating ROOT files in backup..."
 cd "$_WORK_DIR" || exit 1
 
 printf "Updating files in backup ...\n"
@@ -15,48 +18,99 @@ if ! find . -type f | sed 's|^\./||' > "$tmp_filelist"; then
 	printf "Error: Failed to generate file list from backup directory\n"
 	rm "$tmp_errors" "$tmp_filelist"
 	exit 1
-	else
+else
 	echo ---
 	cat "$tmp_filelist"
 	echo ---
 fi
 
-print_style ">>> RSYNC\n" "" orange
+print_style ">>> RSYNC (ROOT)\n" "" orange
 # Use rsync with the generated file list
 # do not change perm/owner in the backup folder
 rsync -avz --no-perms --no-owner --no-group --files-from="$tmp_filelist" / "$_WORK_DIR" 2>"$tmp_errors"
 if [ $? -ne 0 ]; then
-	printf "There were errors updating backup files:\n"
+	printf "There were errors updating ROOT backup files:\n"
 	cat "$tmp_errors" | grep -E "rsync:"
 	rm "$tmp_errors" "$tmp_filelist"
 	exit 1
 fi
-print_style "<<< RSYNC\n" "" orange
+print_style "<<< RSYNC (ROOT)\n" "" orange
 
 rm "$tmp_errors" "$tmp_filelist"
 
+# Update HOME files
+if [ -d "$_HOME_DIR" ]; then
+    echo "Updating HOME files in backup..."
 
-printf "Updating metadata..."
+    tmp_errors=$(mktemp)
+    tmp_filelist_home=$(mktemp)
 
-# remove metadata for files no longer present in backup
-cleanup_metadata "$_WORK_DIR" "$metadata_file"
+    # Generate file list FROM THE BACKUP (not from HOME)
+    # This ensures we ONLY update files that are already in backup
+    cd "$_HOME_DIR" || exit 1
+    if ! find . -type f | sed 's|^\./||' > "$tmp_filelist_home"; then
+        printf "Error: Failed to generate file list from backup directory\n"
+        rm "$tmp_errors" "$tmp_filelist_home"
+        exit 1
+    else
+        echo ---
+        cat "$tmp_filelist_home"
+        echo ---
+    fi
 
-files_list=$(find "$_WORK_DIR" -type f)
+    print_style ">>> RSYNC (HOME)\n" "" orange
+    # rsync to update backup from HOME directory
+    # Uses --files-from with list FROM backup to sync only those files
+    rsync -avz --no-perms --no-owner --no-group --files-from="$tmp_filelist_home" "$HOME/" "$_HOME_DIR" 2>"$tmp_errors"
+    result_home=$?
+    if [ $result_home -ne 0 ]; then
+        printf "There were errors updating HOME backup files:\n"
+        cat "$tmp_errors" | grep -E "rsync:"
+    fi
+    print_style "<<< RSYNC (HOME)\n" "" orange
+    rm "$tmp_errors" "$tmp_filelist_home"
+fi
 
+printf "Updating metadata...\n"
+
+# cleanup metadata for ROOT files
+printf "Cleaning ROOT metadata..."
+cleanup_metadata "$_WORK_DIR" "$metadata_file" "ROOT"
+
+# Update ROOT metadata
+files_list=$(find "$_WORK_DIR" -type f 2>/dev/null)
 for backed_up_file in $files_list; do
 	printf "."
     # Convert backup path to original system path
     original_file="${backed_up_file#"$_WORK_DIR"}"
     if [ -f "$original_file" ]; then
 		# add or update metadata
-        store_metadata "$original_file" "$metadata_file"
+        store_metadata "$original_file" "$metadata_file" "ROOT"
     fi
 done
 printf "Done\n"
 
+# cleanup and update HOME metadata
+if [ -d "$_HOME_DIR" ]; then
+    printf "Cleaning HOME metadata..."
+    cleanup_metadata "$_HOME_DIR" "$metadata_file" "HOME"
+
+    # Update HOME metadata
+    cd "$_HOME_DIR" || exit 1
+    files_list=$(find . -type f 2>/dev/null)
+    for backed_up_file in $files_list; do
+        printf "."
+        # Convert backup path to relative path
+        relative_file="${backed_up_file#./}"
+        if [ -f "$HOME/$relative_file" ]; then
+            # Store with HOME type
+            store_metadata "$relative_file" "$metadata_file" "HOME"
+        fi
+    done
+    printf "Done\n"
+fi
+
 cd "$pwd_before_update" || exit 1
 
 # Generate HTML overview
-generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER"
-
-
+generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER" "$_HOME_DIR"

@@ -6,12 +6,15 @@
 
 help="
 Usage: ggadd <path>
+
+Adds files to current backup layer. Files from home directory (\$HOME)
+are stored in _home/ with relative paths. System files are stored in
+_root/ with absolute paths.
 "
 
-[ -z "$1" ] && echo $help && exit 0
-# realpath resolves symlinks and returns the absolute path:
-# realpath -q /dev/log => /var/run/log
-# Handle realpath differences between Linux and BSD
+[ -z "$1" ] && echo "$help" && exit 0
+
+# Resolve the file path
 if [ "$os" == "Linux" ]; then
     file_to_add="$(realpath "$1" 2>/dev/null)"
 else
@@ -20,32 +23,70 @@ fi
 
 echo "Adding to backup: $file_to_add"
 
-# final checks
-[[ -d "$file_to_add" || -f "$file_to_add" ]] || ( echo "Can not locate file: $1" && exit 1 )
+# Validate file exists
+[[ -d "$file_to_add" || -f "$file_to_add" ]] || {
+    echo "Can not locate file: $1"
+    exit 1
+}
 
-# check if file is within _WORK_DIR
+# Prevent self-referential backups
 if [[ "$file_to_add" =~ ^"$GG_BACKUP_ROOT".* ]]; then
-	echo "Not backing up the backup in the backup :)"
-	exit 1
+    echo "Not backing up the backup in the backup :)"
+    exit 1
 fi
 
-# --delete-after to remove files no longer present in source
-rsync -avR "$file_to_add" "$_WORK_DIR"
+# Determine if file is in HOME directory
+is_home=$(detect_home_file "$file_to_add")
 
-# Store metadata for all files being backed up
-printf "Backing up metadata ..."
-if [ -f "$file_to_add" ]; then
-    # Single file
-    store_metadata "$file_to_add" "$metadata_file"
+if [ "$is_home" == "true" ]; then
+    # HOME file: use _home/ with relative paths
+    echo "Detected home directory file"
 
-elif [ -d "$file_to_add" ]; then
-    # Directory - store metadata for all files
-	files_list=$(find "$file_to_add" -type f)
-	for file in $files_list; do
-		store_metadata "$file" "$metadata_file"
-	done
+    # Get relative path from HOME
+    relative_path=$(get_home_relative_path "$file_to_add")
+
+    # Use rsync to copy with relative path structure
+    # Change to HOME directory and use -R to preserve relative structure
+    cd "$HOME" || exit 1
+    rsync -avR "$relative_path" "$_HOME_DIR/"
+    rsync_result=$?
+
+    # Store metadata with HOME type
+    metadata_file="$_LAYER_DIR/.permissions"
+    printf "Backing up metadata (HOME)..."
+
+    if [ -f "$file_to_add" ]; then
+        store_metadata "$relative_path" "$metadata_file" "HOME"
+    elif [ -d "$file_to_add" ]; then
+        files_list=$(find "$file_to_add" -type f)
+        for file in $files_list; do
+            rel_file=$(get_home_relative_path "$file")
+            store_metadata "$rel_file" "$metadata_file" "HOME"
+        done
+    fi
+
+else
+    # ROOT file: use _root/ with absolute paths (existing behavior)
+    echo "System file (storing in _root)"
+
+    rsync -avR "$file_to_add" "$_WORK_DIR"
+    rsync_result=$?
+
+    # Store metadata with ROOT type
+    metadata_file="$_LAYER_DIR/.permissions"
+    printf "Backing up metadata (ROOT)..."
+
+    if [ -f "$file_to_add" ]; then
+        store_metadata "$file_to_add" "$metadata_file" "ROOT"
+    elif [ -d "$file_to_add" ]; then
+        files_list=$(find "$file_to_add" -type f)
+        for file in $files_list; do
+            store_metadata "$file" "$metadata_file" "ROOT"
+        done
+    fi
 fi
+
 printf "Done.\n"
 
-# Generate HTML overview
-generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER"
+# Generate HTML overview (pass both _root and _home directories)
+generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER" "$_HOME_DIR"
