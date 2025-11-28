@@ -6,7 +6,7 @@
 set SCRIPT_DIR (cd (dirname (status --current-filename)); and pwd)
 
 if not string match -q "*_ggfiles*" $PATH
-    set -gx PATH $PATH $SCRIPT_DIR
+    fish_add_path $SCRIPT_DIR
     echo $SCRIPT_DIR added to '$PATH'
 end
 

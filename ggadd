@@ -33,7 +33,7 @@ fi
 rsync -avR "$file_to_add" "$_WORK_DIR"
 
 # Store metadata for all files being backed up
-
+printf "Backing up metadata ..."
 if [ -f "$file_to_add" ]; then
     # Single file
     store_metadata "$file_to_add" "$metadata_file"
@@ -45,6 +45,7 @@ elif [ -d "$file_to_add" ]; then
 		store_metadata "$file" "$metadata_file"
 	done
 fi
+printf "Done.\n"
 
 # Generate HTML overview
 generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER"
