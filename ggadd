@@ -2,7 +2,7 @@
 
 . $(which _gg_check_root)
 . $(which _gg_check_layer)
-
+. $(which _gg_lib_html)
 
 help="
 Usage: ggadd <path>
