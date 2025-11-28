@@ -68,7 +68,7 @@ else
     # ROOT file: use _root/ with absolute paths (existing behavior)
     echo "System file (storing in _root)"
 
-    rsync -avR "$file_to_add" "$_WORK_DIR"
+    rsync -avR "$file_to_add" "$_ROOT_DIR"
     rsync_result=$?
 
     printf "Backing up metadata (ROOT)..."
@@ -87,4 +87,4 @@ fi
 printf "Done.\n"
 
 # Generate HTML overview (pass both _root and _home directories)
-generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER" "$_HOME_DIR"
+generate_html_overview "$_ROOT_DIR" "$_LAYER_DIR" "$GG_LAYER" "$_HOME_DIR"

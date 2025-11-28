@@ -14,32 +14,45 @@ if [ -z "$GG_LAYER" ]; then
 fi
 
 # define working directories
-_WORK_DIR=$GG_BACKUP_ROOT
+_backup_root=$GG_BACKUP_ROOT
 
 # add ending slash if absent
-[[ "$_WORK_DIR" != */ ]] && _WORK_DIR="$_WORK_DIR"/
+[[ "$_backup_root" != */ ]] && _backup_root="$_backup_root"/
 
-_LAYER_DIR="$_WORK_DIR$GG_LAYER"
-_WORK_DIR="$_LAYER_DIR/_root"
+_LAYER_DIR="$_backup_root$GG_LAYER"
+_ROOT_DIR="$_LAYER_DIR/_root"
 _HOME_DIR="$_LAYER_DIR/_home"
 metadata_file_root="$_LAYER_DIR/.permissions_root"
 metadata_file_home="$_LAYER_DIR/.permissions_home"
 
-if [ -d "$_WORK_DIR" ]; then
-	printf "Selected layer: " && print_style "$GG_LAYER\n" "" orange
-	printf "Working directory: " && print_style "$_LAYER_DIR\n" "" orange
+if [ ! -d $_LAYER_DIR ]; then
+	echo "$_LAYER_DIR not found. Abort."
+	exit 1
 else
-	echo "Working dir not found." && exit 1
+	printf "Selected layer: " && print_style "$GG_LAYER\n" "" orange
+fi
+
+if [ -d "$_ROOT_DIR" ]; then
+	printf "ROOT directory: " && print_style "$_ROOT_DIR\n" "" orange
+else
+	echo "_ROOT dir not found. Creating empty $_ROOT_DIR..."
+	mkdir -p "$_ROOT_DIR" 2>/dev/null || {
+		echo "Warning: Could not create _root directory at $_ROOT_DIR"
+	}
 fi
 
 # Ensure _home/ directory exists (create if missing)
-if [ ! -d "$_HOME_DIR" ]; then
+if [ -d "$_HOME_DIR" ]; then
+	printf "HOME directory: " && print_style "$_HOME_DIR\n" "" orange
+else
+	echo "_HOME dir not found. Creating empty $_HOME_DIR..."
 	mkdir -p "$_HOME_DIR" 2>/dev/null || {
 		echo "Warning: Could not create _home directory at $_HOME_DIR"
 	}
 fi
 
 # Export for use in other commands
+export _ROOT_DIR
 export _HOME_DIR
 export metadata_file_root
 export metadata_file_home

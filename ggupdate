@@ -6,7 +6,7 @@ pwd_before_update=$(pwd)
 
 # Update ROOT files
 echo "Updating ROOT files in backup..."
-cd "$_WORK_DIR" || exit 1
+cd "$_ROOT_DIR" || exit 1
 
 printf "Updating files in backup ...\n"
 tmp_errors=$(mktemp)
@@ -26,7 +26,7 @@ fi
 print_style ">>> RSYNC (ROOT)\n" "" orange
 # Use rsync with the generated file list
 # do not change perm/owner in the backup folder
-rsync -avz --no-perms --no-owner --no-group --files-from="$tmp_filelist" / "$_WORK_DIR" 2>"$tmp_errors"
+rsync -avz --no-perms --no-owner --no-group --files-from="$tmp_filelist" / "$_ROOT_DIR" 2>"$tmp_errors"
 if [ $? -ne 0 ]; then
 	printf "There were errors updating ROOT backup files:\n"
 	cat "$tmp_errors" | grep -E "rsync:"
@@ -75,14 +75,14 @@ printf "Updating metadata...\n"
 # cleanup and update ROOT metadata
 metadata_root="$_LAYER_DIR/.permissions_root"
 printf "Cleaning ROOT metadata..."
-cleanup_metadata "$_WORK_DIR" "$metadata_root" "ROOT"
+cleanup_metadata "$_ROOT_DIR" "$metadata_root" "ROOT"
 
 # Update ROOT metadata
-files_list=$(find "$_WORK_DIR" -type f 2>/dev/null)
+files_list=$(find "$_ROOT_DIR" -type f 2>/dev/null)
 for backed_up_file in $files_list; do
 	printf "."
     # Convert backup path to original system path
-    original_file="${backed_up_file#"$_WORK_DIR"}"
+    original_file="${backed_up_file#"$_ROOT_DIR"}"
     if [ -f "$original_file" ]; then
 		# add or update metadata - new signature: store_metadata(file, file_type)
         store_metadata "$original_file" "ROOT"
@@ -114,4 +114,4 @@ fi
 cd "$pwd_before_update" || exit 1
 
 # Generate HTML overview
-generate_html_overview "$_WORK_DIR" "$_LAYER_DIR" "$GG_LAYER" "$_HOME_DIR"
+generate_html_overview "$_ROOT_DIR" "$_LAYER_DIR" "$GG_LAYER" "$_HOME_DIR"

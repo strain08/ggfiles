@@ -23,22 +23,24 @@ fi
 
 # no spaces allowed in layer name
 GG_LAYER=$( echo "$1" | tr -d '[:space:]' )
+LAYER_HOME="$GG_BACKUP_ROOT/$GG_LAYER/_home"
+LAYER_ROOT="$GG_BACKUP_ROOT/$GG_LAYER/_root"
 
-if [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ] || [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_home" ]; then
+if [ -d "$LAYER_ROOT" ] || [ -d "$LAYER_HOME" ]; then
     echo "Layer '$GG_LAYER' exists at $GG_BACKUP_ROOT/$GG_LAYER"
     echo ""
     echo ROOT files:
-    [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ] && find "$GG_BACKUP_ROOT/$GG_LAYER/_root" -type f
+    [ -d "$LAYER_ROOT" ] && find "$LAYER_ROOT" -type f
 	echo ""
     echo HOME files:
-    [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_home" ] && find "$GG_BACKUP_ROOT/$GG_LAYER/_home" -type f
+    [ -d "$LAYER_HOME" ] && find "$LAYER_HOME" -type f
 	echo ""
 else
     echo "Creating new repository layer at $GG_BACKUP_ROOT/$GG_LAYER"
 fi
 
 # Ensure both _root/ and _home/ directories exist
-mkdir -p "$GG_BACKUP_ROOT/$GG_LAYER/_root" "$GG_BACKUP_ROOT/$GG_LAYER/_home" 2>/dev/null
+mkdir -p "$LAYER_ROOT" "$LAYER_HOME" 2>/dev/null
 
 if [ $? -ne 0 ]; then
     echo "Error: Unable to create directories at $GG_BACKUP_ROOT/$GG_LAYER"
@@ -47,7 +49,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
-if [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ] || [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_home" ]; then
+if [ -d "$LAYER_ROOT" ] || [ -d "$LAYER_HOME" ]; then
     echo "Layer '$GG_LAYER' is now active."
 else
     echo "Layer '$GG_LAYER' created at $GG_BACKUP_ROOT/$GG_LAYER'"

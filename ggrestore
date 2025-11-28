@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 . $(which _gg_check_root)
-. $(which _gg_check_layer) # provides $_WORK_DIR and $_HOME_DIR
+. $(which _gg_check_layer) # provides $_ROOT_DIR and $_HOME_DIR
 
 help="
 Usage: ggrestore [--doit] [file_pattern]
@@ -53,7 +53,7 @@ tmpfile_home=$(mktemp)
 
 # Collect files from _root/
 echo "Scanning _root/ backups..."
-cd "$_WORK_DIR" || exit 1
+cd "$_ROOT_DIR" || exit 1
 if [ -z "$specified_file" ]; then
     # If no pattern specified, get all files
     find . -type f 2>/dev/null | sed 's|^./||' > "$tmpfile_root"
@@ -105,7 +105,7 @@ echo "Found $total_count files to restore (ROOT: $count_root, HOME: $count_home)
 result_root=0
 if [ -s "$tmpfile_root" ]; then
     echo "Restoring ROOT files..."
-    cd "$_WORK_DIR" || exit 1
+    cd "$_ROOT_DIR" || exit 1
     rsync -avq $RSYNC_RUN --files-from="$tmpfile_root" . /
     result_root=$?
 fi
