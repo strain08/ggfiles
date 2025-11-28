@@ -24,31 +24,34 @@ fi
 # no spaces allowed in layer name
 GG_LAYER=$( echo "$1" | tr -d '[:space:]' )
 
-if [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ]; then
-	echo "Layer '$GG_LAYER' exists at $GG_BACKUP_ROOT/$GG_LAYER"
-	echo "Layer contents:"
-	find "$GG_BACKUP_ROOT/$GG_LAYER/_root" -type f
-
-	# Ensure _home/ directory exists for existing layers
-	mkdir -p "$GG_BACKUP_ROOT/$GG_LAYER/_home" 2>/dev/null
-
-	echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
-	echo "Layer '$GG_LAYER' is now active."
-	exit 0
+if [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ] || [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_home" ]; then
+    echo "Layer '$GG_LAYER' exists at $GG_BACKUP_ROOT/$GG_LAYER"
+    echo ""
+    echo ROOT files:
+    [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ] && find "$GG_BACKUP_ROOT/$GG_LAYER/_root" -type f
+	echo ""
+    echo HOME files:
+    [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_home" ] && find "$GG_BACKUP_ROOT/$GG_LAYER/_home" -type f
+	echo ""
 else
-	# Create both _root/ and _home/ directories for new layers
-	mkdir -p "$GG_BACKUP_ROOT/$GG_LAYER/_root" 2>/dev/null
-	mkdir -p "$GG_BACKUP_ROOT/$GG_LAYER/_home" 2>/dev/null
-	if [ $? -ne 0 ]; then
-		echo "Error: Unable to create directories at $GG_BACKUP_ROOT/$GG_LAYER"
-		echo "Layer not set."
-		exit 1
-	else
-		echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
-		echo "Layer '$GG_LAYER' created at $GG_BACKUP_ROOT/$GG_LAYER'"
-		echo "Subdirectories: _root/ and _home/"
-		echo "Layer '$GG_LAYER' is now active."
-		exit 0
-	fi
+    echo "Creating new repository layer at $GG_BACKUP_ROOT/$GG_LAYER"
 fi
+
+# Ensure both _root/ and _home/ directories exist
+mkdir -p "$GG_BACKUP_ROOT/$GG_LAYER/_root" "$GG_BACKUP_ROOT/$GG_LAYER/_home" 2>/dev/null
+
+if [ $? -ne 0 ]; then
+    echo "Error: Unable to create directories at $GG_BACKUP_ROOT/$GG_LAYER"
+    echo "Layer not set."
+    exit 1
+fi
+
+echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
+if [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_root" ] || [ -d "$GG_BACKUP_ROOT/$GG_LAYER/_home" ]; then
+    echo "Layer '$GG_LAYER' is now active."
+else
+    echo "Layer '$GG_LAYER' created at $GG_BACKUP_ROOT/$GG_LAYER'"
+    echo "Layer '$GG_LAYER' is now active."
+fi
+exit 0
 
