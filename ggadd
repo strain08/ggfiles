@@ -51,6 +51,12 @@ if [ "$is_home" == "true" ]; then
     rsync -avR "$relative_path" "$_HOME_DIR/"
     rsync_result=$?
 
+    # Ensure backup files are readable and writable by all
+    find "$_HOME_DIR" -type f -exec chmod 666 {} \; || {
+        echo "Error: Cannot set backup file permissions to 666. Please run with elevated permissions: sudo ggadd $1" >&2
+        exit 1
+    }
+
     printf "Backing up metadata (HOME)..."
 
     if [ -f "$file_to_add" ]; then
@@ -70,6 +76,12 @@ else
 
     rsync -avR "$file_to_add" "$_ROOT_DIR"
     rsync_result=$?
+
+    # Ensure backup files are readable and writable by all
+    find "$_ROOT_DIR" -type f -exec chmod 666 {} \; || {
+        echo "Error: Cannot set backup file permissions to 666. Please run with elevated permissions: sudo ggadd $1" >&2
+        exit 1
+    }
 
     printf "Backing up metadata (ROOT)..."
 

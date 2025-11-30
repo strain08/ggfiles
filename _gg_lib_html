@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+
+# Generate HTML overview of backed up files
+generate_html_overview() {
+    local work_dir="$1"
+    local layer_dir="$2"
+    local layer_name="$3"
+    local home_dir="${4:-}"  # Optional home directory
+    local html_file="$layer_dir/content.html"
+
+    [ ! -d "$work_dir" ] && [ -z "$home_dir" ] && return 1
+
+    # Get total file count and size
+    local total_files=0
+    local total_size=0
+    local generation_date=$(date)
+    if [ ! -f "$GG_BACKUP_ROOT/webroot.conf" ]; then
+        echo "$GG_BACKUP_ROOT/webroot.conf not found."
+        exit 1
+    fi
+    #source GG_WEB_ROOT
+    . "$GG_BACKUP_ROOT/webroot.conf"
+
+    # Start HTML document
+    cat > "$html_file" << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup Overview</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .stats { display: flex; gap: 20px; margin-top: 10px; font-size: 14px; opacity: 0.9; }
+        .search { padding: 20px; border-bottom: 1px solid #eee; }
+        .search input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        .content { padding: 20px; }
+        .folder { margin: 10px 0; }
+        .folder-header { cursor: pointer; font-weight: bold; padding: 5px; background: #ecf0f1; border-radius: 4px; display: flex; align-items: center; }
+        .folder-header:hover { background: #d5dbdb; }
+        .folder-icon { margin-right: 8px; }
+        .folder-content { margin-left: 20px; display: none; }
+        .folder-content.expanded { display: block; }
+        .file { padding: 5px 0; display: flex; align-items: center; border-bottom: 1px solid #f8f9fa; }
+        .file:hover { background: #f8f9fa; }
+        .file-icon { margin-right: 8px; color: #7f8c8d; }
+        .file-name { flex: 1; }
+        .file-name a { text-decoration: none; color: #2980b9; }
+        .file-name a:hover { text-decoration: underline; }
+        .file-meta { font-size: 12px; color: #7f8c8d; text-align: right; min-width: 200px; }
+        .hidden { display: none; }
+
+        @media (prefers-color-scheme: dark) {
+            body { background: #1a1a1a; }
+            .container { background: #2d2d2d; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+            .header { background: #34495e; }
+            .search { border-bottom: 1px solid #444; }
+            .search input { background: #3a3a3a; border: 1px solid #555; color: white; }
+            .search input::placeholder { color: #bbb; }
+            .folder-header { background: #3a3a3a; color: #e0e0e0; }
+            .folder-header:hover { background: #4a4a4a; }
+            .file { border-bottom: 1px solid #3a3a3a; color: #e0e0e0; }
+            .file:hover { background: #3a3a3a; }
+            .file-icon { color: #bbb; }
+            .file-name a { color: #5dade2; }
+            .file-meta { color: #bbb; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗂️ Backup Overview</h1>
+EOF
+
+    echo "            <div class=\"stats\">" >> "$html_file"
+    echo "                <span>📁 Layer: <strong>$layer_name</strong></span>" >> "$html_file"
+    echo "                <span>🕐 Generated: $generation_date</span>" >> "$html_file"
+
+    # Calculate stats for both _root/ and _home/
+    local root_files=0
+    local root_size=0
+    local home_files=0
+    local home_size=0
+
+    if [ -d "$work_dir" ]; then
+        cd "$work_dir" || return 1
+        root_files=$(find . -type f 2>/dev/null | wc -l)
+        if [ "$os" == "Linux" ]; then
+            root_size=$(find . -type f 2>/dev/null -exec stat -c%s {} \; | awk '{sum+=$1} END {print sum}')
+        else
+            root_size=$(find . -type f 2>/dev/null -exec stat -f%z {} \; | awk '{sum+=$1} END {print sum}')
+        fi
+    fi
+
+    if [ -n "$home_dir" ] && [ -d "$home_dir" ]; then
+        cd "$home_dir" || return 1
+        home_files=$(find . -type f 2>/dev/null | wc -l)
+        if [ "$os" == "Linux" ]; then
+            home_size=$(find . -type f 2>/dev/null -exec stat -c%s {} \; | awk '{sum+=$1} END {print sum}')
+        else
+            home_size=$(find . -type f 2>/dev/null -exec stat -f%z {} \; | awk '{sum+=$1} END {print sum}')
+        fi
+    fi
+
+    total_files=$((root_files + home_files))
+    total_size=$((root_size + home_size))
+
+    # Convert bytes to human readable
+    if [ "$total_size" -gt 1073741824 ]; then
+        size_display="$(( total_size / 1073741824 )) GB"
+    elif [ "$total_size" -gt 1048576 ]; then
+        size_display="$(( total_size / 1048576 )) MB"
+    elif [ "$total_size" -gt 1024 ]; then
+        size_display="$(( total_size / 1024 )) KB"
+    else
+        size_display="$total_size bytes"
+    fi
+
+    echo "                <span>📄 Files: <strong>$total_files</strong> (System: $root_files, Home: $home_files)</span>" >> "$html_file"
+    echo "                <span>💾 Size: <strong>$size_display</strong></span>" >> "$html_file"
+
+    cat >> "$html_file" << 'EOF'
+            </div>
+        </div>
+        <div class="search">
+            <input type="text" id="searchBox" placeholder="🔍 Search files..." onkeyup="filterFiles()">
+        </div>
+        <div class="content">
+EOF
+
+    # Function to generate file tree for a directory
+    generate_tree_section() {
+        local dir="$1"
+        local section_name="$2"
+        local section_id="$3"
+        local url_prefix="$4"
+
+        echo "            <h2 style=\"margin-top: 20px; border-top: 2px solid #eee; padding-top: 10px;\">$section_name</h2>" >> "$html_file"
+        echo "            <div id=\"$section_id\">" >> "$html_file"
+
+        if [ ! -d "$dir" ]; then
+            echo "                <p style=\"color: #7f8c8d; font-style: italic;\">No backups in this section</p>" >> "$html_file"
+            echo "            </div>" >> "$html_file"
+            return
+        fi
+
+        cd "$dir" || return 1
+
+        # Create directory structure
+        find . -type d | sort | while read -r subdir; do
+            [ "$subdir" = "." ] && continue
+
+            dir_name=$(basename "$subdir")
+            dir_path=${subdir#./}
+            dir_level=$(echo "$dir_path" | tr -cd '/' | wc -c)
+
+            echo "                <div class=\"folder\" style=\"margin-left: ${dir_level}0px;\">" >> "$html_file"
+            echo "                    <div class=\"folder-header\" onclick=\"toggleFolder(this)\">" >> "$html_file"
+            echo "                        <span class=\"folder-icon\">📁</span>" >> "$html_file"
+            echo "                        <span>$dir_name/</span>" >> "$html_file"
+            echo "                    </div>" >> "$html_file"
+            echo "                    <div class=\"folder-content\">" >> "$html_file"
+
+            # Add files in this directory
+            find "$subdir" -maxdepth 1 -type f | sort | while read -r file; do
+                [ ! -f "$file" ] && continue
+
+                file_name=$(basename "$file")
+                file_path=${file#./}
+                web_url="$url_prefix/$file_path"
+
+                # Get file metadata
+                if [ "$os" == "Linux" ]; then
+                    file_size=$(stat -c%s "$file" 2>/dev/null || echo "0")
+                    file_perms=$(stat -c%a "$file" 2>/dev/null || echo "---")
+                    file_mtime=$(stat -c%y "$file" 2>/dev/null | cut -d' ' -f1)
+                else
+                    file_size=$(stat -f%z "$file" 2>/dev/null || echo "0")
+                    file_perms=$(stat -f%Mp%Lp "$file" 2>/dev/null || echo "---")
+                    file_mtime=$(stat -f%Sm -t%Y-%m-%d "$file" 2>/dev/null)
+                fi
+
+                # Convert file size to human readable
+                if [ "$file_size" -gt 1048576 ]; then
+                    size_display="$(( file_size / 1048576 )) MB"
+                elif [ "$file_size" -gt 1024 ]; then
+                    size_display="$(( file_size / 1024 )) KB"
+                else
+                    size_display="$file_size B"
+                fi
+
+                echo "                        <div class=\"file\">" >> "$html_file"
+                echo "                            <span class=\"file-icon\">📄</span>" >> "$html_file"
+                echo "                            <span class=\"file-name\"><a href=\"$web_url\" target=\"_blank\">$file_name</a></span>" >> "$html_file"
+                echo "                            <span class=\"file-meta\">$size_display | $file_perms | $file_mtime</span>" >> "$html_file"
+                echo "                        </div>" >> "$html_file"
+            done
+
+            echo "                    </div>" >> "$html_file"
+            echo "                </div>" >> "$html_file"
+        done
+
+        # Add files in root directory of section
+        find . -maxdepth 1 -type f | sort | while read -r file; do
+            [ ! -f "$file" ] && continue
+
+            file_name=$(basename "$file")
+            file_path=${file#./}
+            web_url="$url_prefix/$file_path"
+
+            # Get file metadata
+            if [ "$os" == "Linux" ]; then
+                file_size=$(stat -c%s "$file" 2>/dev/null || echo "0")
+                file_perms=$(stat -c%a "$file" 2>/dev/null || echo "---")
+                file_mtime=$(stat -c%y "$file" 2>/dev/null | cut -d' ' -f1)
+            else
+                file_size=$(stat -f%z "$file" 2>/dev/null || echo "0")
+                file_perms=$(stat -f%Mp%Lp "$file" 2>/dev/null || echo "---")
+                file_mtime=$(stat -f%Sm -t%Y-%m-%d "$file" 2>/dev/null)
+            fi
+
+            # Convert file size to human readable
+            if [ "$file_size" -gt 1048576 ]; then
+                size_display="$(( file_size / 1048576 )) MB"
+            elif [ "$file_size" -gt 1024 ]; then
+                size_display="$(( file_size / 1024 )) KB"
+            else
+                size_display="$file_size B"
+            fi
+
+            echo "                <div class=\"file\">" >> "$html_file"
+            echo "                    <span class=\"file-icon\">📄</span>" >> "$html_file"
+            echo "                    <span class=\"file-name\"><a href=\"$web_url\" target=\"_blank\">$file_name</a></span>" >> "$html_file"
+            echo "                    <span class=\"file-meta\">$size_display | $file_perms | $file_mtime</span>" >> "$html_file"
+            echo "                </div>" >> "$html_file"
+        done
+
+        echo "            </div>" >> "$html_file"
+    }
+
+    # Generate sections for ROOT and HOME files
+    if [ -d "$work_dir" ]; then
+        local root_url="$GG_WEB_ROOT/$(basename $GG_BACKUP_ROOT)/$layer_name/_root"
+        generate_tree_section "$work_dir" "System Files (/root)" "root-section" "$root_url"
+    fi
+
+    if [ -n "$home_dir" ] && [ -d "$home_dir" ]; then
+        local home_url="$GG_WEB_ROOT/$(basename $GG_BACKUP_ROOT)/$layer_name/_home"
+        generate_tree_section "$home_dir" "Home Directory Files (~)" "home-section" "$home_url"
+    fi
+
+    # Close HTML document
+    cat >> "$html_file" << 'EOF'
+        </div>
+    </div>
+
+    <script>
+        function toggleFolder(element) {
+            const content = element.nextElementSibling;
+            const icon = element.querySelector('.folder-icon');
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                icon.textContent = '📁';
+            } else {
+                content.classList.add('expanded');
+                icon.textContent = '📂';
+            }
+        }
+
+        function filterFiles() {
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+            const files = document.querySelectorAll('.file');
+            const folders = document.querySelectorAll('.folder');
+
+            files.forEach(file => {
+                const fileName = file.querySelector('.file-name').textContent.toLowerCase();
+                if (fileName.includes(searchTerm)) {
+                    file.classList.remove('hidden');
+                } else {
+                    file.classList.add('hidden');
+                }
+            });
+
+            // Show/hide folders based on visible files
+            folders.forEach(folder => {
+                const visibleFiles = folder.querySelectorAll('.file:not(.hidden)');
+                if (visibleFiles.length > 0 || searchTerm === '') {
+                    folder.classList.remove('hidden');
+                } else {
+                    folder.classList.add('hidden');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+EOF
+
+    echo "HTML overview generated: $html_file"
+}

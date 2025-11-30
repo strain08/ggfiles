@@ -11,7 +11,9 @@ cd "$_ROOT_DIR" || exit 1
 
 printf "Updating files in backup ...\n"
 tmp_errors=$(mktemp)
+chmod 666 "$tmp_errors" 2>/dev/null || true
 tmp_filelist=$(mktemp)
+chmod 666 "$tmp_filelist" 2>/dev/null || true
 
 # Generate file list and check for errors
 if ! find . -type f | sed 's|^\./||' > "$tmp_filelist"; then
@@ -36,6 +38,12 @@ if [ $? -ne 0 ]; then
 fi
 print_style "<<< RSYNC (ROOT)\n" "" orange
 
+# Ensure backup files are readable and writable by all
+find "$_ROOT_DIR" -type f -exec chmod 666 {} \; || {
+    echo "Error: Cannot set backup file permissions to 666. Please run with elevated permissions: sudo ggupdate" >&2
+    exit 1
+}
+
 rm "$tmp_errors" "$tmp_filelist"
 
 # Update HOME files
@@ -43,7 +51,9 @@ if [ -d "$_HOME_DIR" ]; then
     echo "Updating HOME files in backup..."
 
     tmp_errors=$(mktemp)
+    chmod 666 "$tmp_errors" 2>/dev/null || true
     tmp_filelist_home=$(mktemp)
+    chmod 666 "$tmp_filelist_home" 2>/dev/null || true
 
     # Generate file list FROM THE BACKUP (not from HOME)
     # This ensures we ONLY update files that are already in backup
@@ -68,6 +78,13 @@ if [ -d "$_HOME_DIR" ]; then
         cat "$tmp_errors" | grep -E "rsync:"
     fi
     print_style "<<< RSYNC (HOME)\n" "" orange
+
+    # Ensure backup files are readable and writable by all
+    find "$_HOME_DIR" -type f -exec chmod 666 {} \; || {
+        echo "Error: Cannot set backup file permissions to 666. Please run with elevated permissions: sudo ggupdate" >&2
+        exit 1
+    }
+
     rm "$tmp_errors" "$tmp_filelist_home"
 fi
 

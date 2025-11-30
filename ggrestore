@@ -49,7 +49,9 @@ pwd_before_restore=$(pwd)
 
 # Create temporary files for ROOT and HOME file lists
 tmpfile_root=$(mktemp)
+chmod 666 "$tmpfile_root" 2>/dev/null || true
 tmpfile_home=$(mktemp)
+chmod 666 "$tmpfile_home" 2>/dev/null || true
 
 # Collect files from _root/
 echo "Scanning _root/ backups..."
@@ -141,14 +143,24 @@ if [ -z "$RSYNC_RUN" ]; then
 
 	if [ -f "$metadata_root" ]; then
 		printf "Restoring ROOT file permissions and ownership..."
-		restore_metadata "$metadata_root" "ROOT"
+		restore_metadata "$metadata_root" "ROOT" || {
+			echo ""
+			echo "Error: Cannot restore file permissions. Check directory write access." >&2
+			echo "Please try again with elevated permissions: sudo ggrestore [options]" >&2
+			exit 1
+		}
 		echo "done."
 		metadata_found=1
 	fi
 
 	if [ -f "$metadata_home" ]; then
 		printf "Restoring HOME file permissions and ownership..."
-		restore_metadata "$metadata_home" "HOME"
+		restore_metadata "$metadata_home" "HOME" || {
+			echo ""
+			echo "Error: Cannot restore file permissions to user home directory." >&2
+			echo "Please try again with elevated permissions: sudo ggrestore [options]" >&2
+			exit 1
+		}
 		echo "done."
 		metadata_found=1
 	fi

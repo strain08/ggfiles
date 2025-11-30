@@ -137,7 +137,16 @@ store_metadata() {
     fi
 
     # Create metadata file if it doesn't exist
-    [ ! -f "$metadata_file" ] && touch "$metadata_file"
+    if [ ! -f "$metadata_file" ]; then
+        touch "$metadata_file" || {
+            echo "Error: Cannot create metadata file" >&2
+            exit 1
+        }
+        chmod 666 "$metadata_file" || {
+            echo "Error: Cannot set permissions on metadata file. Try: sudo ggadd <file>" >&2
+            exit 1
+        }
+    fi
 
     # Escape special characters in filename for sed pattern
     local escaped_file=$(printf '%s\n' "$file" | sed 's/[[\.*^$(){}?+|/]/\\&/g')
@@ -157,6 +166,12 @@ store_metadata() {
         # Add new entry
         echo "$new_metadata" >> "$metadata_file"
     fi
+
+    # Ensure metadata file is readable and writable by all
+    chmod 666 "$metadata_file" || {
+        echo "Error: Cannot set permissions on metadata file. Try: sudo ggadd <file>" >&2
+        exit 1
+    }
 }
 
 
@@ -173,6 +188,10 @@ cleanup_metadata() {
     # Create a temporary file for cleaned metadata
     local temp_file="${metadata_file}.cleanup_tmp"
     > "$temp_file"
+    chmod 666 "$temp_file" || {
+        echo "Error: Cannot set permissions on temporary metadata file. Try: sudo ggupdate" >&2
+        exit 1
+    }
 
     # Read each line from metadata file
     # Since metadata file is dedicated to one type, we just check file existence
@@ -192,7 +211,14 @@ cleanup_metadata() {
     done < "$metadata_file"
 
     # Replace original metadata file with cleaned version
-    mv "$temp_file" "$metadata_file"
+    mv "$temp_file" "$metadata_file" || {
+        echo "Error: Cannot update metadata file. Try: sudo ggupdate" >&2
+        exit 1
+    }
+    chmod 666 "$metadata_file" || {
+        echo "Error: Cannot set permissions on metadata file. Try: sudo ggupdate" >&2
+        exit 1
+    }
 }
 
 # Restore files metadata from metadata file

@@ -48,7 +48,15 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env
+echo "GG_LAYER=$GG_LAYER" > /tmp/gg_layer.env || {
+    echo "Error: Cannot create layer env file" >&2
+    exit 1
+}
+chmod 666 /tmp/gg_layer.env || {
+    echo "Error: Cannot set permissions on layer env file. Try: sudo gglayer $1" >&2
+    exit 1
+}
+
 if [ -d "$LAYER_ROOT" ] || [ -d "$LAYER_HOME" ]; then
     echo "Layer '$GG_LAYER' is now active."
 else
