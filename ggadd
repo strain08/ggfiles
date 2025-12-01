@@ -48,14 +48,8 @@ if [ "$is_home" == "true" ]; then
     # Use rsync to copy with relative path structure
     # Change to HOME directory and use -R to preserve relative structure
     cd "$HOME" || exit 1
-    rsync -avR "$relative_path" "$_HOME_DIR/"
+    rsync -avR --chmod=Du=rwx,Dg=rwx,Do=,Fu=rw,Fg=rw,Fo= --chown=:$REPO_GROUP "$relative_path" "$_HOME_DIR/"
     rsync_result=$?
-
-    # Ensure backup files are readable and writable by all
-    find "$_HOME_DIR" -type f -exec chmod 666 {} \; || {
-        echo "Error: Cannot set backup file permissions to 666. Please run with elevated permissions: sudo ggadd $1" >&2
-        exit 1
-    }
 
     printf "Backing up metadata (HOME)..."
 
@@ -74,14 +68,8 @@ else
     # ROOT file: use _root/ with absolute paths (existing behavior)
     echo "System file (storing in _root)"
 
-    rsync -avR "$file_to_add" "$_ROOT_DIR"
+    rsync -avR --chmod=Du=rwx,Dg=rwx,Do=,Fu=rw,Fg=rw,Fo= --chown=:$REPO_GROUP "$file_to_add" "$_ROOT_DIR"
     rsync_result=$?
-
-    # Ensure backup files are readable and writable by all
-    find "$_ROOT_DIR" -type f -exec chmod 666 {} \; || {
-        echo "Error: Cannot set backup file permissions to 666. Please run with elevated permissions: sudo ggadd $1" >&2
-        exit 1
-    }
 
     printf "Backing up metadata (ROOT)..."
 

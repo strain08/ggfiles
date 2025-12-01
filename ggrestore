@@ -25,19 +25,19 @@ case $1 in
 			echo "Restoring all files from backup..."
 			specified_file=""
 		else
-			echo "Searching backup for: " && print_style "$2\n" "" purple
+			echo -e "Searching backup for: ${FG_MAGENTA}$2 ${RESET}"
 			specified_file="$2"
 		fi
 	;;
 
 	*)
 		RSYNC_RUN="--dry-run"
-		print_style "** DRY RUN MODE ** " "" "green" && echo "Use --doit to do it."
+		echo -e "${FG_GREEN}** DRY RUN MODE ** ${RESET}Use --doit to do it."
 		if [ -z "$1" ]; then
 			echo "Restoring all files from backup..."
 			specified_file=""
 		else
-			echo "Searching backup for: " && print_style "$1\n" "" purple
+			echo -e "Searching backup for: ${FG_MAGENTA}$1 ${RESET}"
 			specified_file="$1"
 		fi
 	;;
@@ -49,9 +49,7 @@ pwd_before_restore=$(pwd)
 
 # Create temporary files for ROOT and HOME file lists
 tmpfile_root=$(mktemp)
-chmod 666 "$tmpfile_root" 2>/dev/null || true
 tmpfile_home=$(mktemp)
-chmod 666 "$tmpfile_home" 2>/dev/null || true
 
 # Collect files from _root/
 echo "Scanning _root/ backups..."
@@ -123,42 +121,43 @@ if [ -s "$tmpfile_home" ]; then
     fi
 fi
 
-# cleanup
-rm "$tmpfile_root" "$tmpfile_home"
-cd "$pwd_before_restore" || exit 1
-
 # Check for errors
 if [ $result_root -ne 0 ] || [ $result_home -ne 0 ]; then
+	rm "$tmpfile_root" "$tmpfile_home"
 	echo "Errors encountered during restore."
 	exit 1
 fi
 
+cd "$pwd_before_restore" || exit 1
+
 if [ -z "$RSYNC_RUN" ]; then
     echo "Restore completed successfully."
 
-	# Restore metadata (permissions and ownership) from both ROOT and HOME metadata files
+	# Restore metadata (permissions and ownership) selectively - only for files that were restored
 	metadata_root="$_LAYER_DIR/.permissions_root"
 	metadata_home="$_LAYER_DIR/.permissions_home"
 	metadata_found=0
 
-	if [ -f "$metadata_root" ]; then
+	if [ -f "$metadata_root" ] && [ -s "$tmpfile_root" ]; then
 		printf "Restoring ROOT file permissions and ownership..."
-		restore_metadata "$metadata_root" "ROOT" || {
+		restore_metadata_selective "$metadata_root" "ROOT" "$tmpfile_root" || {
 			echo ""
 			echo "Error: Cannot restore file permissions. Check directory write access." >&2
 			echo "Please try again with elevated permissions: sudo ggrestore [options]" >&2
+			rm "$tmpfile_root" "$tmpfile_home"
 			exit 1
 		}
 		echo "done."
 		metadata_found=1
 	fi
 
-	if [ -f "$metadata_home" ]; then
+	if [ -f "$metadata_home" ] && [ -s "$tmpfile_home" ]; then
 		printf "Restoring HOME file permissions and ownership..."
-		restore_metadata "$metadata_home" "HOME" || {
+		restore_metadata_selective "$metadata_home" "HOME" "$tmpfile_home" || {
 			echo ""
 			echo "Error: Cannot restore file permissions to user home directory." >&2
 			echo "Please try again with elevated permissions: sudo ggrestore [options]" >&2
+			rm "$tmpfile_root" "$tmpfile_home"
 			exit 1
 		}
 		echo "done."
@@ -169,5 +168,8 @@ if [ -z "$RSYNC_RUN" ]; then
 		echo "No metadata files found. File permissions preserved from rsync."
 	fi
 else
-    print_style "Dry run completed." "" green && echo " Use --doit to perform the actual restore"
+    echo -e "${FG_GREEN}Dry run completed.${RESET} Use --doit to perform the actual restore"
 fi
+
+# cleanup - remove temp files after metadata restoration
+rm "$tmpfile_root" "$tmpfile_home" 2>/dev/null

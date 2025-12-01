@@ -256,3 +256,48 @@ restore_metadata() {
     done < "$metadata_file"
 }
 
+# Restore files metadata selectively - only for files in the restored_files list
+# Signature: restore_metadata_selective(metadata_file, file_type, restored_files_path)
+restore_metadata_selective() {
+    local metadata_file="$1"
+    local file_type="${2:-ROOT}"  # ROOT or HOME - determines ownership behavior
+    local restored_files_path="$3"
+
+    [ ! -f "$metadata_file" ] && return 0
+    [ ! -f "$restored_files_path" ] && return 0
+
+    while read -r line; do
+        [ -z "$line" ] && continue
+
+        # Parse simplified format: filepath perms uid gid (no type annotation)
+        local file
+        local perms
+        local uid
+        local gid
+
+        file=$(echo "$line" | awk '{print $1}')
+        perms=$(echo "$line" | awk '{print $2}')
+        uid=$(echo "$line" | awk '{print $3}')
+        gid=$(echo "$line" | awk '{print $4}')
+
+        # Only restore metadata if file is in the restored_files list
+        if ! grep -qF "$file" "$restored_files_path"; then
+            continue
+        fi
+
+        # Skip symlinks - rsync doesn't restore metadata for symlinks
+        [ -L "$file" ] && continue
+
+        # For HOME files, override stored uid/gid with current user
+        if [ "$file_type" == "HOME" ]; then
+            uid=$(id -u)
+            gid=$(id -g)
+        fi
+
+        if [ -e "$file" ]; then
+            chmod "$perms" "$file" 2>/dev/null || echo "Warning: Could not set permissions on $file"
+            chown "$uid:$gid" "$file" 2>/dev/null || echo "Warning: Could not set ownership on $file (may need sudo)"
+        fi
+    done < "$metadata_file"
+}
+
